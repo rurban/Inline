@@ -2,7 +2,7 @@ package Inline;
 
 use strict;
 require 5.005;
-$Inline::VERSION = '0.41';
+$Inline::VERSION = '0.42';
 
 use AutoLoader 'AUTOLOAD';
 use Inline::denter;
@@ -713,7 +713,9 @@ sub create_config_file {
 	$inline =~ s|/+|/|g;
 	$inline =~ s|/?Inline\.pm||;
 	$inline ||= '.';
-	my $INC = "-I$inline -I" . join(" -I", grep {-d "$_/Inline"} @INC);
+	my $INC = "-I$inline -I" . join(" -I", grep {(-d "$_/Inline" or 
+						      -d "$_/auto/Inline"
+						     )} @INC);
 	system "$perl $INC -MInline=_CONFIG_ -e1 $dir"
 	  and croak M20_config_creation_failed($dir);
 	return;

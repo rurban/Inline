@@ -29,6 +29,10 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
+Inline version 0.42 is a minor release:
+
++ Applied a couple patches. Python and Tcl now install properly.
+
 Inline version 0.41 is a minor release:
 
 + Added the AUTOWRAP feature for C

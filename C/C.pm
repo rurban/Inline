@@ -8,7 +8,7 @@ use Data::Dumper;
 use Carp;
 use Cwd qw(cwd abs_path);
 
-$Inline::C::VERSION = '0.40';
+$Inline::C::VERSION = '0.42';
 @Inline::C::ISA = qw(Inline);
 
 #==============================================================================
@@ -109,7 +109,7 @@ END
 	    $value = [$value] unless ref($value) eq 'ARRAY';
 	    my %filters;
 	    for my $val (@$value) {
-		if (ref($value) eq 'CODE') {
+		if (ref($val) eq 'CODE') {
 		    $o->add_list($o->{ILSM}, $key, $val, []);
 	        }
 		else {
@@ -149,10 +149,10 @@ END
 		  unless ($value =~ /^[_a-z][_0-9a-z]*$/i);
 		$o->{STRUCT}{$value}++;
 	    }
-	    eval "require Inline::Struct";
+	    eval { require Inline::Struct };
 	    croak "'STRUCTS' option requires Inline::Struct to be installed."
 	      if $@;
-	    $o->{STRUCT}{'.any'} = 1 unless defined $o->{STRUCT}{'.any'};
+	    $o->{STRUCT}{'.any'} = 1;
 	    next;
 	}
 	my $class = ref $o; # handles subclasses correctly.
@@ -633,6 +633,7 @@ my %fixes = (
 	     INSTALLSITEARCH => 'install_lib',
 	     INSTALLDIRS => 'installdirs',
 	     XSUBPPARGS => 'xsubppargs',
+	     INSTALLSITELIB => 'install_lib',
 	    );
 
 sub fix_make {

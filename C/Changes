@@ -1,5 +1,13 @@
 Revision history for Perl extension Inline::C.
 
+0.42  Sun Jun 10 23:50:27 PDT 2001
+	- Patch that fixes STRUCTS config option being used for explicit
+	  structs.
+
+0.42  Sun Jun 10 18:34:36 PDT 2001
+	- Patch that prevents Inline from creating a nonexistent sitelib
+	  Thanks Joey Hess.
+
 0.41  Tue Jun  5 01:49:32 PDT 2001
 	- Added AUTOWRAP config option
 

@@ -1,5 +1,9 @@
 Revision history for Perl extension Inline.
 
+0.42  Sun Jun 10 18:21:06 PDT 2001
+	- Re-fixed config generator path bug prevents ILSMs like I::Python
+	  and I::Tcl from installing. (NEILW)
+
 0.41  Tue Jun  5 00:23:46 PDT 2001
 	- Don't install .inline or .inl files with Inline::MakeMaker.
 	  Require object name to be same as package name for installation.
