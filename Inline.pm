@@ -2,7 +2,7 @@ package Inline;
  
 use strict;
 require 5.005;
-$Inline::VERSION = '0.33';
+$Inline::VERSION = '0.34';
 
 use Inline::messages;
 use Config;

@@ -8,7 +8,7 @@ use Data::Dumper;
 use Carp;
 use Cwd qw(cwd abs_path);
 
-$Inline::C::VERSION = '0.33';
+$Inline::C::VERSION = '0.34';
 @Inline::C::ISA = qw(Inline);
 
 #==============================================================================
@@ -555,6 +555,9 @@ END
     print MF <<END;
 \};
 WriteMakefile(\%options);
+
+# Remove the Makefile dependency. Causes problems on a few systems.
+sub MY::makefile { '' }
 END
     close MF;
 }

@@ -27,6 +27,11 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
+Inline version 0.34 fixes 2 minor bugs:
+
++ Makefile.PL got confused on $Config::Config{cc} with full pathnames or flags
++ Makefile.PL/Makefile dependency caused a problem in one rare case.
+
 Inline version 0.33 is a minor upgrade with the following changes:
 
 + Support for Inline::Struct and Inline::Filters

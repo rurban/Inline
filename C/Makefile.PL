@@ -3,43 +3,64 @@ use ExtUtils::MakeMaker;
 use Config;
 
 my ($cc, $exe) = @Config{'cc', '_exe'};
+$cc =~ s/\s+-.+$//; #remove possible trailing options
+
 my $found = 0;
-for my $lib (split /[:;]/, $ENV{PATH}) {
-    $found = -f "$lib/${cc}$exe" and last;
+my $delim = $^O eq 'MSWin32' ? ';' : ':';
+if ($cc =~ m|/|) {
+    $found = -f "$cc$exe";
+}
+else {
+    for my $lib (split $delim, $ENV{PATH}) {
+	$found = -f "$lib/$cc$exe" and last;
+    }
 }
 
-if ($found) {
-    print <<END;
+print <<END;
 
 Inline::C is packaged with Inline.pm because it is the most commonly used
 Inline language module. See also: Inline::CPP (C++), ::Java, ::Python, 
 ::Tcl, ::ASM, and ::CPR.
 
-I have found the C compiler '${cc}$exe' on your system by searching your PATH.
+Config.pm indicates that your version of Perl was built with this C compiler:
+
+    $cc$exe
+
+END
+
+if ($found) {
+    print <<END;
+I have located this compiler on your system:
 
 END
 }
 else {
     print <<END;
+I cannot locate this compiler on your system.
 
-The C compiler '${cc}$exe' was not found on your system by searching your 
-PATH. You can install Inline.pm without installing Inline::C. But you'll
+You can install Inline.pm without installing Inline::C. But you'll
 need to install another Inline language module (like Inline::Java for 
-instance) to actually make any use of it.
+instance) to actually make use of it. 
+
+If the aforementioned C compiler really is on your system, please make sure
+it can be found in the PATH and then try running this program again. Or if
+you think I made an error searching for this compiler, simply answer 'Y' to
+the next question.
 
 END
+# '
 }
 
 my $answer = '';
 my $default = $found ? "y" : "n";
 while (1) {
-    $answer = prompt ('Do you want to install Inline::C?', $default);
+    $answer = prompt ('Do you want to install Inline::C?', $default); 
     last if $answer =~ /^(y|yes|n|no)$/i;
 }
 
 if ($answer =~ /^(y|yes)$/i) {
     WriteMakefile(
-		  NAME => 'Inline::C',
+	 	  NAME => 'Inline::C',
 		  VERSION_FROM => 'C.pm',
 		  clean => {FILES => '_Inline_test/'},
 		 )

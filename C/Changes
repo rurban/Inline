@@ -1,5 +1,14 @@
 Revision history for Perl extension Inline::C.
 
+0.34  Sun May  6 16:56:53 PDT 2001
+	- Changed the generated Makefile.PL to not create any dependencies 
+	  between Makefile and Makefile.PL. This was creating a problem on
+	  an HP-UX system using AFS. Inline users should never need this 
+	  dependency anyways.
+
+0.34  Tue May  1 00:05:58 PDT 2001
+	- Fixed compiler detection bugs in Makefile.PL
+
 0.33  Sat Apr 28 20:20:29 PDT 2001
 	- Made Inline::C a base class for Inline::CPP
 
