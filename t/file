@@ -1,5 +1,5 @@
-/* Inline C file */
+# Inline Foo file
 
-int add(int x, int y) {
-    return x + y;
+foo-sub test1 {
+    foo-return $_[0] foo-eq 'test1';
 }

@@ -8,22 +8,24 @@ This document contains all of the latest support information for C<Inline.pm> an
 
 =head1 SUPPORTED LANGUAGES
 
-The most important language that Inline supports is C. That is because Perl itself is written in C<C>. By giving a your Perl scripts access to C<C>, you in effect give them access to the entire glorious internals of Perl. (Caveat scriptor :-)
+The most important language that Inline supports is C<C>. That is because Perl itself is written in C<C>. By giving a your Perl scripts access to C<C>, you in effect give them access to the entire glorious internals of Perl. (Caveat scriptor :-)
 
 As of this writing, Inline also supports:
 
  - C++
+ - Java
  - Python
+ - Tcl
+ - Assembly
  - CPR
+ - And even Inline::Foo! :)
 
 Projects that I would most like to see happen in the year 2001 are:
 
- - Java
  - Fortran
  - Ruby
+ - Lisp
  - Bash
-
-B<Note:> Since many C<C> compilers allow the use of assembly code within C, you may want to consider Assembly Language as supported. Ready to start scripting out new device drivers?
 
 =head1 SUPPORTED PLATFORMS
 
@@ -34,28 +36,24 @@ C<Inline::C> should work anywhere that CPAN extension modules (those that use XS
     make test
     make install
 
-It has been tested on many Unix variants and Windows NT.
+It has been tested on many Unix and Windows variants.
 
 B<NOTE>: C<Inline::C> requires Perl 5.005 or higher because C<Parse::RecDescent> requires it. (Something to do with the C<qr> operator)
 
-Inline has been tested on the following platforms:
+Inline has been successfully tested at one time or another on the following platforms:
 
- V#   OS      OS V#   Perl V# Human              Email 
- 0.20 FreeBSD 3.4     5.00503 Timothy A Gregory  tgregory@tarjema.com      
- 0.20 FreeBSD 4.0     5.00503 Timothy A Gregory  tgregory@tarjema.com      
- 0.20 FreeBSD 4.0     5.6     Timothy A Gregory  tgregory@tarjema.com      
- 0.20 Linux   2.0.36  5.00503 Prakasa Bellam     pbellam@cobaltgroup.com
- 0.20 HPUX    B.10.20 5.00503 Jamie Shaffer      jshaffer@chronology.com
- 0.20 SunOS   5.6     5.6.0   Jamie Shaffer      jshaffer@chronology.com
- 0.20 SunOS   5.5.1   5.6.0   Jamie Shaffer      jshaffer@chronology.com
- 0.22 OpenBSD 2.7     5.6.0   Jeremy Devenport   jeremy@weezel.com
- 0.22 FreeBSD 3.1     5.00503 Doug Beaver        dougb@scalar.org
- 0.25 Linux   2.2.13  5.00503 Brian Ingerson     ingy@cpan.org
- 0.25 Linux   2.2.13  5.6     Brian Ingerson     ingy@cpan.org
- 0.25 WinNT   4.0 sp6 5.00503 Brian Ingerson     ingy@cpan.org
- 0.26 Cygwin  1.1.1   5.6.0   Leo Schalkwyk      L.Schalkwyk@iop.kcl.ac.uk
- 0.26 AIX     4.3.3   5.00502 Norbert E. Gruener nog@MPA-Garching.MPG.DE
- 0.26 BeOS    5.03Pro 5.00503 Daniel J. Berger   djberge@uswest.com
+    Linux
+    Solaris
+    SunOS
+    HPUX
+    AIX
+    FreeBSD
+    OpenBSD
+    BeOS
+    OS X
+    WinNT
+    Win2K
+    Cygwin
 
 The Microsoft tests deserve a little more explanation. I used the following:
 
@@ -75,7 +73,7 @@ To install C<Inline.pm> (or any other CPAN module) on MSWin32 w/ Visual C++, use
 
 The "Cygwin" test was done on a Windows 98 machine using the Cygwin Unix/Win32 porting layer software from Cygnus. The C<perl> binary on this machine was also compiled using the Cygwin tool set (C<gcc>). This software is freely available from http://sources.redhat.com/cygwin/
 
-If Inline works on your platform, you can email me the info above. If it doesn't work, let me know as well and I'll see what can be done.
+If you get Inline to work on a new platform, please send me email email. If it doesn't work, let me know as well and I'll see what can be done.
 
 =head1 SEE ALSO
 
@@ -97,9 +95,9 @@ Brian Ingerson <INGY@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001, Brian Ingerson. 
+Copyright (c) 2000, 2001. Brian Ingerson. All rights reserved.
 
-All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
+This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 See http://www.perl.com/perl/misc/Artistic.html
 

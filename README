@@ -27,6 +27,15 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
+Inline version 0.33 is a minor upgrade with the following changes:
+
++ Support for Inline::Struct and Inline::Filters
++ Added ENABLE and DISABLE configuration modifiers.
++ C installation is optional
++ Test harness reworked. Faster testing.
++ Fixed all reported (and some unreported) bugs.
++ Documentation enhancements.
+
 Inline version 0.32 is a minor upgrade with the following changes:
 
 + Addition of UNTAINT, SAFEMODE, GLOBAL_LOAD, MAKE, and LDDLFLAGS

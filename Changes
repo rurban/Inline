@@ -1,5 +1,27 @@
 Revision history for Perl extension Inline.
 
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- 'require FindBin' instead of 'use FindBin' for mod_perl.
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Fixed Win32 bug. Drive letter 'c:' can be lower case.
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Changed 'make install' to 'make pure_install'
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Fixed bug of assuminh ':' for PATH separator. (Windows bug)
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Rearranged test harness. Removed dependency on C for tests.
+	  Invented Inline::Foo for testing.
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Added ENABLE and DISABLE config modifiers.
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Changed the way ILSMs are detected.
+
 0.32  Mon Feb 26 07:44:34 PST 2001
 	- Add DIRECTORY path to applicable warnings and error msgs
 

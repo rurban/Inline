@@ -359,6 +359,57 @@ See L<CGI> for more information on using the C<CGI.pm> module.
 
 =cut --------------------------------------------------------------------------
 
+=head2 mod_perl
+
+=over 4
+
+=item Problem
+
+How do I use Inline with mod_perl?
+
+=item Solution
+
+    package Factorial;
+    use strict;
+    use Inline Config => 
+               DIRECTORY => '/usr/local/apache/Inline',
+               ENABLE => 'UNTAINT';
+    use Inline 'C';
+    Inline->init;
+  
+    sub handler {
+        my $r = shift;
+        $r->send_http_header('text/plain');
+        printf "%3d! = %10d\n", $_, factorial($_) for 1..100;
+        return Apache::Constants::OK;
+    }
+
+    1;
+    __DATA__
+    __C__
+    double factorial(double x) {
+        if (x < 2)  return 1;
+        return x * factorial(x - 1)
+    }
+
+=item Discussion
+
+This is a fully functional mod_perl handler that prints out the factorial values for the numbers 1 to 100. Since we are using Inline under mod_perl, there are a few considerations to , um, consider.
+
+First, mod_perl handlers are usually run with -T taint detection. Therefore, we need to enable the UNTAINT option. The next thing to deal with is the fact that this handler will most likely be loaded after Perl's compile time. Since we are using the DATA section, we need to use the special C<init()> call. And of course we need to specify a DIRECTORY that mod_perl can compile into. I<See the above CGI example for more info.>
+
+Other than that, this is a pretty straightforward mod_perl handler, tuned for even more speed! 
+
+=item See Also
+
+See Stas Bekman's upcoming O'Reilly book on mod_perl to which this example was contributed.
+
+=item Credits
+
+=back
+
+=cut --------------------------------------------------------------------------
+
 =head2 Object Oriented Inline
 
 =over 4

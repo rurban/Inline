@@ -1,5 +1,18 @@
 Revision history for Perl extension Inline::C.
 
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Made Inline::C a base class for Inline::CPP
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Added support for Inline::Filters. FILTERS config option.
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Made installation of Inline::C optional. For those people without 
+	  a C compiler who may wish to use Java.
+
+0.33  Sat Apr 28 20:20:29 PDT 2001
+	- Rearranged test harness. Moved all C tests from Inline to Inline::C
+
 0.32  Mon Feb 26 15:36:56 PST 2001
 	- Added MAKE config option
 	- Changed LDFLAGS to proper name LDDLFLAGS. (MakeMaker)

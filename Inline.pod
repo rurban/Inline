@@ -4,11 +4,13 @@ Inline - Write Perl subroutines in other programming languages.
 
 =head1 SYNOPSIS
 
+    use Inline C;
+    
     print "9 + 16 = ", add(9, 16), "\n";
     print "9 - 16 = ", subtract(9, 16), "\n";
  
-    use Inline C => <<'END_OF_C_CODE';
-    
+    __END__
+    __C__
     int add(int x, int y) {
       return x + y;
     }
@@ -16,14 +18,12 @@ Inline - Write Perl subroutines in other programming languages.
     int subtract(int x, int y) {
       return x - y;
     }
-   
-    END_OF_C_CODE
 
 =head1 DESCRIPTION
 
 The Inline module allows you to put source code from other programming languages directly "inline" in a Perl script or module. The code is automatically compiled as needed, and then loaded for immediate access from Perl.
 
-Inline saves you from the hassle of having to write and compile your own glue code using facilities like XS or SWIG. Simply type the code where you want it and run your Perl as normal. All the hairy details are handled for you. The compilation and installation of your code chunks all happen transparently; all you will notice is the delay of compilation.
+Inline saves you from the hassle of having to write and compile your own glue code using facilities like XS or SWIG. Simply type the code where you want it and run your Perl as normal. All the hairy details are handled for you. The compilation and installation of your code chunks all happen transparently; all you will notice is the delay of compilation on the first run.
 
 The Inline code only gets compiled the first time you run it (or whenever it is modified) so you only take the performance hit once. Code that is Inlined into distributed modules (like on the CPAN) will get compiled when the module is installed, so the end user will never notice the compilation time.
 
@@ -64,17 +64,17 @@ With Inline you can be up and running in minutes. There is a C Cookbook with lot
 
 Perl programmers cannot be bothered with silly things like compiling. "Tweak, Run, Tweak, Run" is our way of life. Inline does all the dirty work for you.
 
-Another advantage of Inline is that you can use directly it in a script. You can even use it in a Perl one-liner. With XS and SWIG, you always set up an entirely separate module. Even if you only have one or two functions. Inline makes easy things easy, and hard things possible. Just like Perl.
+Another advantage of Inline is that you can use it directly in a script. You can even use it in a Perl one-liner. With XS and SWIG, you always set up an entirely separate module. Even if you only have one or two functions. Inline makes easy things easy, and hard things possible. Just like Perl.
 
-Finally, Inline supports several programming languages (not just C and C++). As of this writing, Inline has support for C, C++, Python, and CPR. There are plans to add many more. See L<"SUPPORTED LANGUAGES"> below. 
+Finally, Inline supports several programming languages (not just C and C++). As of this writing, Inline has support for C, C++, Java, Python, Tcl, Assembler, and CPR. There are plans to add many more. See L<Inline-Support> for details. 
 
 =back
 
 =head1 Using the Inline.pm Module
 
-Inline is a little bit different than most of the Perl modules that you are used to. It doesn't import any functions into your namespace and it doesn't have any object oriented methods. Its entire interface (with one exception) is specified through the C<'use Inline ...'> command.
+Inline is a little bit different than most of the Perl modules that you are used to. It doesn't import any functions into your namespace and it doesn't have any object oriented methods. Its entire interface (with two minor exceptions) is specified through the C<'use Inline ...'> command.
 
-This section will explain all of the different ways to C<use Inline>. If you want to begin using Inline immediately, see L<Inline::C-Cookbook>.
+This section will explain all of the different ways to C<use Inline>. If you want to begin using C with Inline immediately, see L<Inline::C-Cookbook>.
 
 =head2 The Basics
 
@@ -126,18 +126,20 @@ Instead of specifying the source code as a here-document string, you may want to
       return x - y;
     }
 
-This syntax makes use of the source-file keyword, C<'DATA'>, and a special marker: C<__C__>. 'C' is the programming language you are binding to. Inline will read through the DATA filehandle and look for the special marker. It will use everything up until the next marker, a POD command, or the end of the file. 
+This syntax makes use of the source-file keyword, C<'DATA'>, and a special marker: C<__C__>. 'C' is the programming language you are binding to. Inline will read through the DATA filehandle and look for the special marker. It will use everything up until the next marker or the end of the file. 
 
 NOTE: The 'DATA' keyword can be ommitted if there are no extra parameters following it.
 
-This allows you to specify multiple Inline sections, possibly in different programming languages, and POD documentation all in the same place. If you want to specify AutoLoader subroutines as well, put them before the first Inline marker. Here is another example:
+If you are writing a module, you can also use the DATA section for POD and AutoLoader subroutines. Just be sure to put them before the first Inline marker. If you install the helper module L<Inline::Filters>, you can even use POD inside your Inline code. You just have to specify a filter to strip it out.
+
+You can also specify multiple Inline sections, possibly in different programming languages. Here is another example:
 
     # The module Foo.pm
     package Foo;
     use AutoLoader;
     
     use Inline C;
-    use Inline C;
+    use Inline C => DATA => FILTERS => 'Strip_POD';
     use Inline Python;
     
     1;
@@ -148,13 +150,16 @@ This allows you to specify multiple Inline sections, possibly in different progr
         # This is an autoloaded subroutine
     }
     
+    =head1 External subroutines
+    
+    =cut
+    
     __C__
     /* First C section */
     
     __C__
     /* Second C section */
-    
-    =head1
+    =head1 My C Function
     
     Some POD doc.
     
@@ -170,7 +175,7 @@ NOTE: Versions of Inline prior to 0.30 suggested a syntax of:
     use Inline;
     Inline->import(C => <DATA>);
 
-to read source code from the C<DATA> filehandle. This syntax has been deprecated. It will still work, but you will get a warning if C<$^W> is true. It will eventually be removed from the syntax. Use the new syntax for getting source code from the C<DATA> filehandle. If you really need to access Inline at run time, use the C<bind()> method instead. This (supported) code would do the same thing as the deprecated syntax:
+to read source code from the C<DATA> filehandle. This syntax has been deprecated. It will still work, but you will get a warning. It will soon be removed from the syntax. Use the new syntax for getting source code from the C<DATA> filehandle. If you really need to access Inline at run time, use the C<bind()> method instead. This (supported) code would do the same thing as the deprecated syntax:
 
     use Inline;
     Inline->bind(C => [<DATA>]);
@@ -239,6 +244,20 @@ The C<DIRECTORY> and C<NOWARN> options are generic Inline options. All other opt
 
 B<NOTE> - Versions of Inline prior to 0.30, used a module called C<Inline::Config> to configure Inline. This module is no longer supported and will no longer work with Inline. If you have it installed, remove it from your system to avoid occasional warnings. Everything that you could do with C<Inline::Config> is still possible through the new configuration syntax.
 
+=head2 On and Off
+
+If a particular config option has value options of 1 and 0, you can use the ENABLE and DISABLE modifiers. In other words, this:
+
+    use Inline Config => 
+               FORCE_BUILD => 1,
+               CLEAN_AFTER_BUILD => 0;
+
+could be reworded as 
+
+    use Inline Config =>
+               ENABLE => FORCE_BUILD,
+               DISABLE => CLEAN_AFTER_BUILD;
+
 =head2 Playing 'with' Others
 
 Inline has a special configuration syntax that tells it to get more configuration options from other Perl modules. Here is an example:
@@ -287,7 +306,7 @@ It is probably best to have a separate C<'.Inline/'> directory for each project 
 
 All programmers make mistakes. When you make a mistake with Inline, like writing bad C code, you'll get a big error report on your screen. This report tells you where to look to do the debugging. 
 
-When Inline needs to compile something it creates a subdirectory under your C<DIRECTORY/build/> directory. This is where it writes all the components it needs to build your extension. Things like XS files, Makefiles and output log files.
+When Inline needs to build something it creates a subdirectory under your C<DIRECTORY/build/> directory. This is where it writes all the components it needs to build your extension. Things like XS files, Makefiles and output log files.
 
 If everything goes OK, Inline will delete this subdirectory. If there is an error, Inline will leave the directory intact and print its location. The idea is that you are supposed to go into that directory and figure out what happened.
 
@@ -326,25 +345,47 @@ Modules specified using the config form of C<WITH> will B<not> be automatically 
 
 =head2 GLOBAL_LOAD
 
-This option is for compiled languages only. It tells Inline to tell DynaLoader to load an object file in such a way that its symbols can be dynamically resolved by other object files. May not work on all platforms.
+This option is for compiled languages only. It tells Inline to tell DynaLoader to load an object file in such a way that its symbols can be dynamically resolved by other object files. May not work on all platforms. See the C<GLOBAL> shortcut below.
 
 =head2 UNTAINT
 
-You must use this option  whenever you use Perl's C<-T> switch, for taint checking. This option tells Inline to blindly untaint all tainted variables. It also turns on SAFEMODE by default.
+You must use this option  whenever you use Perl's C<-T> switch, for taint checking. This option tells Inline to blindly untaint all tainted variables. It also turns on SAFEMODE by default. See the C<UNTAINT> shortcut below.
 
 =head2 SAFEMODE
 
 Perform extra safety checking, in an attempt to thwart malicious code. This option cannot guarantee security, but it does turn on all the currently implemented checks.
 
-There is a slight startup penalty by using SAFEMODE. Also, using UNTAINT automatically turns this option on. If you need your code to start faster under C<-T> (taint) checking, you'll need to turn this option off manually. Only do this if you are not worried about security risks.
+There is a slight startup penalty by using SAFEMODE. Also, using UNTAINT automatically turns this option on. If you need your code to start faster under C<-T> (taint) checking, you'll need to turn this option off manually. Only do this if you are not worried about security risks. See the C<UNSAFE> shortcut below.
+
+=head2 FORCE_BUILD
+
+Makes Inline build (compile) the source code every time the program is run. The default is 0. See the C<FORCE> shortcut below.
+
+=head2 CLEAN_AFTER_BUILD
+
+Tells Inline to clean up the current build area if the build was successful. Sometimes you want to DISABLE this for debugging. Default is 1. See the C<NOCLEAN> shortcut below.
+
+=head2 CLEAN_BUILD_AREA
+
+Tells Inline to clean up the old build areas within the entire Inline DIRECTORY. Default is 0. See the C<CLEAN> shortcut below.
+
+=head2 PRINT_INFO
+
+Tells Inline to print various information about the source code. Default is 0. See the C<INFO> shortcut below.
+
+=head2 PRINT_VERSION
+
+Tells Inline to print Version info about itself. Default is 0. See the C<VERSION> shortcut below.
+
+=head2 REPORTBUG
+
+Puts Inline into 'REPORTBUG' mode, which is what you want if you desire to report a bug.
 
 =head2 NOWARN
 
-    use Inline C => DATA => NOWARN => 1;
-
 This option tells Inline to turn off any warnings.
 
-It is B<NOT> yet implemented.
+B<NOTE:> It is B<NOT> yet implemented.
 
 =head2 Inline Configuration Shortcuts
 
@@ -356,7 +397,11 @@ or
 
     perl -MInline=Info,force,NoClean inline_script.pl
 
-You can specify multiple shortcuts separated by commas. They are not case sensitive.
+You can specify multiple shortcuts separated by commas. They are not case sensitive. You can also specify shorcuts inside the Inline program like this:
+
+    use Inline 'Info', 'Force', 'Noclean';
+
+NOTE: If a C<'use Inline'> statement is used to set shortcuts, it can not be used for additional purposes.
 
 =over 4
 
@@ -465,6 +510,8 @@ Now all you need to do is:
 
 That will generate the file C<Math-Simple-0.01.tar.gz> which is a distributable package.
 
+IMPORTANT NOTE: It has been determined that creating modules for CPAN using the above technique is doable, but not optimal. The basic problem is that there is no way to automatically remove old executable objects on subsequent releases. There are also some additional subtle problems. So, my official stance is to not use Inline for CPAN modules until Inline release 0.40 or greater. These issues will be resolved at that release level. This technique is still perfectly fine for personal use, if your not too concerned about have a few harmless artifacts in your site lib tree.
+
 =head1 How Inline Works
 
 In reality, Inline just automates everything you would need to do if you were going to do it by hand (using XS, etc).
@@ -484,15 +531,15 @@ or
     use Inline;
     bind Inline C => "Source-Code";
 
-where C<C> is the programming language of the source code, and C<Source-Code> is a string (most easily represented by using the "Here Document" quoting style; see L<"SYNOPSIS"> above), a file name, an array reference, or a reference to a subroutine.
+where C<C> is the programming language of the source code, and C<Source-Code> is a string, a file name, an array reference, or the special C<'DATA'> keyword.
 
-Since Inline is coded in a "C<use>" statement, everything is done during Perl's compile time. If anything needs to be done that will affect the C<Source-Code> string, it needs to be done in a C<BEGIN> block that is I<before> the "C<use Inline ...>" statement. If you really need to specify code to Inline at runtime, you can use the C<bind()> method.
+Since Inline is coded in a "C<use>" statement, everything is done during Perl's compile time. If anything needs to be done that will affect the C<Source-Code>, it needs to be done in a C<BEGIN> block that is I<before> the "C<use Inline ...>" statement. If you really need to specify code to Inline at runtime, you can use the C<bind()> method.
 
-Source code that is stowed in the 'DATA' section of your code, is read in by an C<INIT> subroutine in Inline. That's because the C<DATA> filehandle is not available at compile time.
+Source code that is stowed in the C<'DATA'> section of your code, is read in by an C<INIT> subroutine in Inline. That's because the C<DATA> filehandle is not available at compile time.
 
-=item 2) Check if the Source Code has been Compiled
+=item 2) Check if the Source Code has been Built
 
-Inline only needs to compile the source code if it has not yet been compiled. It accomplishes this seemingly magical task in an extremely simple and straightforward manner. It runs the source text through the C<Digest::MD5> module to produce a 128-bit "fingerprint" which is virtually unique. The fingerprint (in hex) is I<mangled> with the current package name (and the script name, if the package is "C<main>") along with the name of the programming language, to form a unique name for the executable module. For instance, the C<C> code from C<examples/example001.pl> (see L<"Examples In C">) would mangle into:
+Inline only needs to build the source code if it has not yet been built. It accomplishes this seemingly magical task in an extremely simple and straightforward manner. It runs the source text through the C<Digest::MD5> module to produce a 128-bit "fingerprint" which is virtually unique. The fingerprint (in hex) is I<mangled> with the current package name (and the script name, if the package is "C<main>") along with the name of the programming language, to form a unique name for the executable module. For instance, the C<C> code from C<examples/example001.pl> (see L<"Examples In C">) would mangle into:
 
  main_C_example001_pl_3a9a7ba88a8fb10714be625de5e701f1.so
 
@@ -500,7 +547,7 @@ If an executable with that name already exists, then proceed to step 8. (No comp
 
 =item 3) Find a Place to Build and Install
 
-At this point Inline knows it needs to compile the source code. The first thing to figure out is where to create the great big mess associated with compilation, and where to put the object when it's done.
+At this point Inline knows it needs to build the source code. The first thing to figure out is where to create the great big mess associated with compilation, and where to put the object when it's done.
 
 By default Inline will try to build and install under the first place that meets one of the following conditions:
 
@@ -520,33 +567,27 @@ If the C<SITE_INSTALL> option is in effect, then Inline will only use C<./_Inlin
 
 =item 4) Parse the Source for Semantic Cues
 
-Inline uses the module C<Parse::RecDescent> to parse through your chunks of source code and look for things that it can create run-time bindings to. For instance, in C<C> it looks for all of the function definitions and breaks them down into names and data types. These elements are used to correctly bind the C<C> function to a C<Perl> subroutine.
+Inline::C uses the module C<Parse::RecDescent> to parse through your chunks of C source code and look for things that it can create run-time bindings to. In C<C> it looks for all of the function definitions and breaks them down into names and data types. These elements are used to correctly bind the C<C> function to a C<Perl> subroutine. Other Inline languages like Python and Java actually use the C<python> and C<javac> modules to parse the Inline code.
 
 =item 5) Create the Build Environment
 
-Now Inline can take all of the gathered information and create an environment to build your source code into an executable. Without going into all the details, it just creates the appropriate directories, creates the appropriate source files including an XS file and a C<Makefile.PL>.
+Now Inline can take all of the gathered information and create an environment to build your source code into an executable. Without going into all the details, it just creates the appropriate directories, creates the appropriate source files including an XS file (for C) and a C<Makefile.PL>.
 
-=item 6) Compile the Code and Install the Executable
+=item 6) Build the Code and Install the Executable
 
 The planets are in alignment. Now for the easy part. Inline just does what you would do to install a module. "C<perl Makefile.PL && make && make test && make install>". If something goes awry, Inline will croak with a message indicating where to look for more info.
 
 =item 7) Tidy Up
 
-By default, Inline will remove all of the mess created by the build process, assuming that everything worked. If the compile fails, Inline will leave everything intact, so that you can debug your errors. Setting the C<NOCLEAN> shortcut option will also stop Inline from cleaning up.
+By default, Inline will remove all of the mess created by the build process, assuming that everything worked. If the build fails, Inline will leave everything intact, so that you can debug your errors. Setting the C<NOCLEAN> shortcut option will also stop Inline from cleaning up.
 
 =item 8) DynaLoad the Executable
 
-Inline uses the C<DynaLoader::bootstrap> method to pull your external module into C<Perl> space. Now you can call all of your external functions like Perl subroutines.
+For C (and C++), Inline uses the C<DynaLoader::bootstrap> method to pull your external module into C<Perl> space. Now you can call all of your external functions like Perl subroutines. 
+
+Other languages like Python and Java, provide their own loaders.
 
 =back
-
-=head1 SUPPORTED LANGUAGES
-
-This section has been moved to L<Inline-Support>.
-
-=head1 SUPPORTED PLATFORMS
-
-This section has been moved to L<Inline-Support>.
 
 =head1 SEE ALSO
 
@@ -577,11 +618,7 @@ Here are some things to watch out for:
 
 =item 1
 
-While Inline does attempt to clean up after itself, there is currently no functionality to remove a shared object when a new version is compiled. This shouldn't be hard to do, but I want to think about it a little more. 
-
-=item 2
-
-If you use function names that happen to be used internally by Perl, you will get a load error at run time. There is currently no functionality to prevent this or to warn you. For now, a list of Perl's internal symbols is packaged in the Inline module distribution under the filename C<'symbols.perl'>. Avoid using these in your code.
+While Inline does attempt to clean up after itself, there is currently no functionality to remove a shared object when a new version is compiled. This will be addressed in version 0.40 and higher.
 
 =back
 
@@ -589,13 +626,13 @@ If you use function names that happen to be used internally by Perl, you will ge
 
 Brian Ingerson <INGY@cpan.org>
 
-Neil Watkiss <NEILW@cpan.org> is the author of C<Inline::CPP> and C<Inline::Python>. He also provided assistance for the major reworking in version 0.30. It is largely because of Neil, that Inline is evolving at a rapid pace.
+Neil Watkiss <NEILW@cpan.org> is the author of C<Inline::CPP>, C<Inline::Python>, C<Inline::ASM>, C<Inline::Struct> and C<Inline::Filters>. He is known in the innermost Inline circles as the "Boy Wonder".
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000 - 2001, Brian Ingerson. 
+Copyright (c) 2000, 2001. Brian Ingerson. All rights reserved.
 
-All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
+This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 See http://www.perl.com/perl/misc/Artistic.html
 

@@ -3,14 +3,12 @@ package Inline::C;
 use strict;
 require Inline;
 require Inline::C::grammar;
-use Parse::RecDescent;
 use Config;
 use Data::Dumper;
-use FindBin;
 use Carp;
 use Cwd qw(cwd abs_path);
 
-$Inline::C::VERSION = '0.32';
+$Inline::C::VERSION = '0.33';
 @Inline::C::ISA = qw(Inline);
 
 #==============================================================================
@@ -40,36 +38,43 @@ END
 sub validate {
     my $o = shift;
 
-    $o->{C} = {};
-    $o->{C}{XS} = {};
-    $o->{C}{MAKEFILE} = {};
-    $o->{C}{AUTO_INCLUDE} ||= <<END;
+    $o->{ILSM} ||= {};
+    $o->{ILSM}{XS} ||= {};
+    $o->{ILSM}{MAKEFILE} ||= {};
+    $o->{ILSM}{AUTO_INCLUDE} ||= <<END;
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
 #include "INLINE.h"
 END
+    $o->{ILSM}{FILTERS} ||= [];
+    $o->{STRUCT} ||= {
+		      '.macros' => '',
+		      '.xs' => '',
+		      '.any' => 0, 
+		      '.all' => 0,
+		     };
 
     while (@_) {
 	my ($key, $value) = (shift, shift);
 	if ($key eq 'MAKE') {
-	    $o->{C}{$key} = $value;
+	    $o->{ILSM}{$key} = $value;
 	    next;
 	}
 	if ($key eq 'CC' or
 	    $key eq 'LD') {
-	    $o->{C}{MAKEFILE}{$key} = $value;
+	    $o->{ILSM}{MAKEFILE}{$key} = $value;
 	    next;
 	}
 	if ($key eq 'LIBS') {
-	    add_list($o->{C}{MAKEFILE}, $key, $value, []);
+	    $o->add_list($o->{ILSM}{MAKEFILE}, $key, $value, []);
 	    next;
 	}
 	if ($key eq 'INC' or
 	    $key eq 'MYEXTLIB' or
 	    $key eq 'CCFLAGS' or
 	    $key eq 'LDDLFLAGS') {
-	    add_string($o->{C}{MAKEFILE}, $key, $value, '');
+	    $o->add_string($o->{ILSM}{MAKEFILE}, $key, $value, '');
 	    next;
 	}
 	if ($key eq 'TYPEMAPS') {
@@ -78,32 +83,84 @@ END
 	    my ($path, $file) = ($value =~ m|^(.*)[/\\](.*)$|) ?
 	      ($1, $2) : ('.', $value);
 	    $value = abs_path($path) . '/' . $file;
-	    add_list($o->{C}{MAKEFILE}, $key, $value, []);
+	    $o->add_list($o->{ILSM}{MAKEFILE}, $key, $value, []);
 	    next;
 	}
 	if ($key eq 'AUTO_INCLUDE') {
-	    add_text($o->{C}, $key, $value, '');
+	    $o->add_text($o->{ILSM}, $key, $value, '');
 	    next;
 	}
 	if ($key eq 'BOOT') {
-	    add_text($o->{C}{XS}, $key, $value, '');
+	    $o->add_text($o->{ILSM}{XS}, $key, $value, '');
 	    next;
 	}
 	if ($key eq 'PREFIX') {
 	    croak "Invalid value for 'PREFIX' option"
 	      unless ($value =~ /^\w*$/ and
 		      $value !~ /\n/);
-	    $o->{C}{XS}{PREFIX} = $value;
+	    $o->{ILSM}{XS}{PREFIX} = $value;
 	    next;
 	}
-	croak "'$key' is not a valid config option for Inline::C\n";
+	if ($key eq 'FILTERS') {
+	    next if $value eq '1' or $value eq '0'; # ignore ENABLE, DISABLE
+	    $value = [$value] unless ref($value) eq 'ARRAY';
+	    my %filters;
+	    for my $val (@$value) {
+		if (ref($value) eq 'CODE') {
+		    $o->add_list($o->{ILSM}, $key, $val, []);
+	        }
+		else {
+		    eval { require Inline::Filters };
+		    croak "'FILTERS' option requires Inline::Filters to be installed."
+		      if $@;
+		    %filters = Inline::Filters::get_filters($o->{language})
+		      unless keys %filters;
+		    if (defined $filters{$val}) {
+			my $filter = Inline::Filters->new($val, 
+							  $filters{$val});
+			$o->add_list($o->{ILSM}, $key, $filter, []);
+		    }
+		    else {
+			croak "Invalid filter $val specified.";
+		    }
+		}
+	    }
+	    next;
+	}
+	if ($key eq 'STRUCTS') {
+	    # A list of struct names
+	    if (ref($value) eq 'ARRAY') {
+		for my $val (@$value) {
+		    croak "Invalid value for 'STRUCTS' option"
+		      unless ($val =~ /^[_a-z][_0-9a-z]*$/i);
+		    $o->{STRUCT}{$val}++;
+		}
+	    }
+	    # Enable or disable
+	    elsif ($value =~ /^\d+$/) {
+		$o->{STRUCT}{'.any'} = $value;
+	    }
+	    # A single struct name
+	    else {
+		croak "Invalid value for 'STRUCTS' option"
+		  unless ($value =~ /^[_a-z][_0-9a-z]*$/i);
+		$o->{STRUCT}{$value}++;
+	    }
+	    eval "require Inline::Struct";
+	    croak "'STRUCTS' option requires Inline::Struct to be installed."
+	      if $@;
+	    $o->{STRUCT}{'.any'} = 1 unless defined $o->{STRUCT}{'.any'};
+	    next;
+	}
+	my $class = ref $o; # handles subclasses correctly.
+	croak "'$key' is not a valid config option for $class\n";
     }
 }
 
 sub add_list {
+    my $o = shift;
     my ($ref, $key, $value, $default) = @_;
-    $value = [$value] unless ref $value;
-    croak usage_validate($key) unless ref($value) eq 'ARRAY';
+    $value = [$value] unless ref $value eq 'ARRAY';
     for (@$value) {
 	if (defined $_) {
 	    push @{$ref->{$key}}, $_;
@@ -115,6 +172,7 @@ sub add_list {
 }
 
 sub add_string {
+    my $o = shift;
     my ($ref, $key, $value, $default) = @_;
     $value = [$value] unless ref $value;
     croak usage_validate($key) unless ref($value) eq 'ARRAY';
@@ -129,6 +187,7 @@ sub add_string {
 }
 
 sub add_text {
+    my $o = shift;
     my ($ref, $key, $value, $default) = @_;
     $value = [$value] unless ref $value;
     croak usage_validate($key) unless ref($value) eq 'ARRAY';
@@ -148,7 +207,6 @@ sub add_text {
 #==============================================================================
 sub build {
     my $o = shift;
-#    $o->{parser} = undef;print Dumper $o;exit;
     $o->parse;
     $o->write_XS;
     $o->write_Inline_headers;
@@ -178,6 +236,7 @@ sub info {
     else {
 	$text .= "No $o->{language} functions have been successfully bound to Perl.\n\n";
     }
+    $text .= Inline::Struct::info($o) if $o->{STRUCT}{'.any'};
     return $text;
 }
 
@@ -197,11 +256,14 @@ sub parse {
     $o->get_types;
 
     $::RD_HINT++;
+    require Parse::RecDescent;
     my $parser = $o->{parser} = Parse::RecDescent->new($grammar);
+    $parser->{data}{typeconv} = $o->{typeconv};
 
-    $parser->c_code($o->{code})
+    $o->{ILSM}{code} = $o->filter(@{$o->{ILSM}{FILTERS}});
+    Inline::Struct::parse($o) if $o->{STRUCT}{'.any'};
+    $parser->c_code($o->{ILSM}{code})
       or croak "Bad C code passed to Inline at @{[caller(2)]}\n";
-#    print STDERR Data::Dumper::Dumper $parser->{data};
 }
 
 #==============================================================================
@@ -218,10 +280,13 @@ sub get_maps {
     warn "Can't find the default system typemap file"
       if (not $typemap and $^W);
 
-    unshift(@{$o->{C}{MAKEFILE}{TYPEMAPS}}, $typemap) if $typemap;
+    unshift(@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}, $typemap) if $typemap;
 
-    if (-f "$FindBin::Bin/typemap") {
-	push @{$o->{C}{MAKEFILE}{TYPEMAPS}}, "$FindBin::Bin/typemap";
+    if (not $o->UNTAINT) {
+	require FindBin;
+	if (-f "$FindBin::Bin/typemap") {
+	    push @{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}, "$FindBin::Bin/typemap";
+	}
     }
 }
 
@@ -233,10 +298,10 @@ sub get_types {
     my (%type_kind, %proto_letter, %input_expr, %output_expr);
     my $o = shift;
     croak "No typemaps specified for Inline C code"
-      unless @{$o->{C}{MAKEFILE}{TYPEMAPS}};
+      unless @{$o->{ILSM}{MAKEFILE}{TYPEMAPS}};
     
     my $proto_re = "[" . quotemeta('\$%&*@;') . "]";
-    foreach my $typemap (@{$o->{C}{MAKEFILE}{TYPEMAPS}}) {
+    foreach my $typemap (@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}) {
 	next unless -e $typemap;
 	# skip directories, binary files etc.
 	warn("Warning: ignoring non-text typemap file '$typemap'\n"), next 
@@ -286,16 +351,21 @@ sub get_types {
 	close(TYPEMAP);
     }
 
-    %Inline::C::valid_types = 
+    my %valid_types = 
       map {($_, 1)}
     grep {defined $input_expr{$type_kind{$_}}}
     keys %type_kind;
 
-    %Inline::C::valid_rtypes = 
+    my %valid_rtypes = 
       map {($_, 1)}
-    grep {defined $output_expr{$type_kind{$_}}}
-    keys %type_kind;
-    $Inline::C::valid_rtypes{void} = 1;
+    (grep {defined $output_expr{$type_kind{$_}}}
+    keys %type_kind), 'void';
+
+    $o->{typeconv}{type_kind} = \%type_kind;
+    $o->{typeconv}{input_expr} = \%input_expr;
+    $o->{typeconv}{output_expr} = \%output_expr;
+    $o->{typeconv}{valid_types} = \%valid_types;
+    $o->{typeconv}{valid_rtypes} = \%valid_rtypes;
 }
 
 sub ValidProtoString ($) {
@@ -328,16 +398,18 @@ sub C_string ($) {
 sub write_XS {
     my $o = shift;
     my ($pkg, $module, $modfname) = @{$o}{qw(pkg module modfname)};
-    my $prefix = (($o->{C}{XS}{PREFIX}) ?
-		  "PREFIX = $o->{C}{XS}{PREFIX}" :
+    my $prefix = (($o->{ILSM}{XS}{PREFIX}) ?
+		  "PREFIX = $o->{ILSM}{XS}{PREFIX}" :
 		  '');
 		  
     $o->mkpath($o->{build_dir});
     open XS, "> $o->{build_dir}/$modfname.xs"
       or croak $!;
     print XS <<END;
-$o->{C}{AUTO_INCLUDE}
-$o->{code}
+$o->{ILSM}{AUTO_INCLUDE}
+$o->{STRUCT}{'.macros'}
+$o->{ILSM}{code}
+$o->{STRUCT}{'.xs'}
 
 MODULE = $module	PACKAGE = $pkg	$prefix
 
@@ -400,11 +472,11 @@ END
     }
     print XS "\n";
 
-    if (defined $o->{C}{XS}{BOOT} and
-	$o->{C}{XS}{BOOT}) {
+    if (defined $o->{ILSM}{XS}{BOOT} and
+	$o->{ILSM}{XS}{BOOT}) {
 	print XS <<END;
 BOOT:
-$o->{C}{XS}{BOOT}
+$o->{ILSM}{XS}{BOOT}
 END
     }
 
@@ -458,13 +530,13 @@ END
 sub write_Makefile_PL {
     my $o = shift;
     $o->{xsubppargs} = '';
-    for (@{$o->{C}{MAKEFILE}{TYPEMAPS}}) {
+    for (@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}) {
 	$o->{xsubppargs} .= "-typemap $_ ";
     }
 
     my %options = (
 		   VERSION => '0.00',
-		   %{$o->{C}{MAKEFILE}},
+		   %{$o->{ILSM}{MAKEFILE}},
 		   NAME => $o->{module},
 		  );
     
@@ -498,14 +570,14 @@ sub compile {
 
     -f ($perl = $Config::Config{perlpath})
       or croak "Can't locate your perl binary";
-    $make = $o->{C}{MAKE} || $Config::Config{make}
+    $make = $o->{ILSM}{MAKE} || $Config::Config{make}
       or croak "Can't locate your make binary";
     $cwd = &cwd;
     ($cwd) = $cwd =~ /(.*)/ if $o->UNTAINT;
     for $cmd ("$perl Makefile.PL > out.Makefile_PL 2>&1",
 	      \ &fix_make,   # Fix Makefile problems
 	      "$make > out.make 2>&1",
-	      "$make install > out.make_install 2>&1",
+	      "$make pure_install > out.make_install 2>&1",
 	     ) {
 	if (ref $cmd) {
 	    $o->$cmd();

@@ -1,14 +1,15 @@
+use lib qw(../blib/lib ./blib/lib);
 use strict;
 use Test;
+use diagnostics;
+use Inline Config => DIRECTORY => './_Inline_test';
 
 plan(tests => 1,
      todo => [],
      onfail => sub {},
     );
 
-
 use Inline C => DATA =>
-           DIRECTORY => './_Inline_test',
            TYPEMAPS => './t/typemap';
 
 # test 1

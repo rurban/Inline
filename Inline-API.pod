@@ -21,36 +21,38 @@ Inline-API - How to bind a programming language to Perl using Inline.pm
 
 So you think Inline C is pretty cool, but what you really need is for Perl to work with the brand new programming language "Foo++". Well you're in luck. C<Inline.pm> has support for adding your own Inline Language Support Module (B<ILSM>), like C<Inline::Foo>.
 
-Inline has always been intended to work with lots of different programming languages. Many of the details can be shared between implementations, so that C<Inline::Java> has a similar interface to C<Inline::Fortran>. All of the common code is in C<Inline.pm>. 
+Inline has always been intended to work with lots of different programming languages. Many of the details can be shared between implementations, so that C<Inline::Java> has a similar interface to C<Inline::ASM>. All of the common code is in C<Inline.pm>. 
 
 Language specific modules like C<Inline::Python> are subclasses of C<Inline.pm>. They can inherit as much of the common behaviour as they want, and provide specific behaviour of their own. This usually comes in the form of Configuration Options and language specific compilation.
 
 The Inline C support is probably the best boilerplate to copy from. Since version 0.30 all C support was isolated into the module C<Inline::C> and the parsing grammar is further broken out into C<Inline::C::grammar>. All of these components come with the Inline distribution.
 
+You may also wish to look at the joke language Inline::Foo which is distributed with Inline. It actually is a full functioning ILSM. I use it in Inline's test harness to test base Inline functionality. It is very short, and can help you get your head wrapped around the Inline API.
+
 This POD gives you all the details you need for implementing an ILSM. For further assistance, contact inline@perl.org See L<"SEE ALSO"> below.
 
 =head1 A Skeleton
 
-For the remainder of this tutorial, let's assume we're writing an ILSM for the ficticious language C<Foo++>. We'll call it C<Inline::Foo>. Here is the skeleton Perl code you'll need to implement it.
+For the remainder of this tutorial, let's assume we're writing an ILSM for the ficticious language C<Foo++>. We'll call it C<Inline::FooPP>. Here is the skeleton Perl code you'll need to implement it.
 
-    package Inline::Foo;
+    package Inline::FooPP;
     
     use strict;
     require Inline;
-    require Inline::Foo::grammar;
+    require Inline::FooPP::grammar;
     use Parse::RecDescent;
     use Config;
     use Carp;
     
-    $Inline::Foo::VERSION = '0.05';
-    @Inline::Foo::ISA = qw(Inline);
+    $Inline::FooPP::VERSION = '0.05';
+    @Inline::FooPP::ISA = qw(Inline);
     
     #===========================================================
     # Register Foo++ as an Inline Language Support Module (ILSM)
     #===========================================================
     sub register {
         return {
-                language => 'Foo',
+                language => 'FooPP',
                 aliases => ['Foo++', 'F++'],
                 type => 'compiled',
                 suffix => $Config{so},
@@ -63,18 +65,18 @@ For the remainder of this tutorial, let's assume we're writing an ILSM for the f
     sub validate {
         my $o = shift; # This is the Inline object
     
-        $o->{Foo} = {};
+        $o->{ILSM} = {};
         while (@_) {
         my ($key, $value) = (shift, shift);
         if ($key eq 'BAR') {
-            $o->{Foo}{BAR} = $value;  # Store config value in object
+            $o->{ILSM}{BAR} = $value;  # Store config value in object
             next;
         }
         if ($key eq 'BAZ') {
-            $o->{Foo}{BAZ} = $value;
+            $o->{ILSM}{BAZ} = $value;
             next;
         }
-        croak "'$key' is not a valid config option for Inline::Foo\n";
+        croak "'$key' is not a valid config option for Inline::FooPP\n";
         }
     }
     
@@ -114,9 +116,9 @@ Except for C<load()>, the subroutines in this code are mandatory for an ILSM. Wh
 
 =item 1
 
-C<Inline::Foo> must be a subclass of Inline. This is accomplished with:
+C<Inline::FooPP> must be a subclass of Inline. This is accomplished with:
 
-    @Inline::Foo::ISA = qw(Inline);
+    @Inline::FooPP::ISA = qw(Inline);
 
 =item 2
 
@@ -126,13 +128,15 @@ The line 'C<require Inline;>' is not necessary. But it is there to remind you no
 
 Remember, it is not valid for a user to say:
 
-    use Inline::Foo;
+    use Inline::FooPP;
 
-C<Inline.pm> will detect such usage for you in its C<import> method, which is automatically inherited since C<Inline::Foo> is a subclass.
+C<Inline.pm> will detect such usage for you in its C<import> method, which is automatically inherited since C<Inline::FooPP> is a subclass.
 
 =item 4
 
 It is not necessary to implement your parsing with C<Parse::RecDescent>. But I recommend it. :-)
+
+An alternative parsing method that works well for many ILSMs (like Java and Python) is to use the language's compiler itself to parse for you. This works as long as the compiler can be made to give back parse information.
 
 =back
 
@@ -149,7 +153,7 @@ You will need to provide the following 5 callback subroutines.
 This subroutine receives no arguments. It returns a reference to a hash of ILSM meta-data. Inline calls this routine only when it is trying to detect new ILSM-s that have been installed on a given system. Here is an example of the has ref you would return for Foo++:
 
     {
-     language => 'Foo',
+     language => 'FooPP',
      aliases => ['Foo++', 'F++'],
      type => 'compiled',
     };
@@ -202,7 +206,7 @@ This method is called when the user makes use of the C<INFO> shortcut. You shoul
 
 C<Inline.pm> creates a hash based Perl object for each section of Inlined source code it receives. This object contains lots of information about the code, the environment, and the configuration options used. You are free to store any additional information in the object.
 
-To prevent naming clashes with future version of Inline you use a subhash under the key 'Foo' (The name of your language). This is the convention.
+To prevent naming clashes with future version of Inline you use a subhash under the key 'ILSM'. This is the convention.
 
 This section will describe all of the Inline object attributes.
 
@@ -216,7 +220,7 @@ The proper name of the language being used.
 
 =head2 The language_id Attribute
 
-The language name specified by the user. Could be 'Foo++' instead of 'Foo'.
+The language name specified by the user. Could be 'Foo++' instead of 'FooPP'.
 
 =head2 The module Attribute
 
@@ -274,7 +278,7 @@ This is where all of the non-language specific configuration options are stored.
 
 =item FORCE_BUILD
 
-Flag indicating whether or not Inline should call the C<Inline::Foo::build()> method even if the code has already been compiled. (0 or 1)
+Flag indicating whether or not Inline should call the C<Inline::FooPP::build()> method even if the code has already been compiled. (0 or 1)
 
 =item PRINT_VERSION
 
@@ -338,7 +342,9 @@ Brian Ingerson <INGY@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001, Brian Ingerson. All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
+Copyright (c) 2000, 2001. Brian Ingerson. All rights reserved.
+
+This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 See http://www.perl.com/perl/misc/Artistic.html
 

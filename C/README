@@ -50,7 +50,7 @@ This module requires the Inline module with which it is distributed. It also
 requires the appropriate C compiler. (Where appropriate means the one referred
 to in your Config.pm) 
 
-Inline::C is installed automatically with Inline.pm.
+Inline::C is packaged with Inline.pm. It is not necessary to install Inline::C to use Inline with some other language, like Java. 
 
 -------------------------------------------------------------------------------
 INFORMATION:

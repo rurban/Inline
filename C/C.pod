@@ -65,6 +65,17 @@ Specify which compiler to use.
 
 Specify extra compiler flags.
 
+=head2 FILTERS
+
+Allows you to specify a list of source code filters. If more than one is requested, be sure to group them with an array ref. The filters can either be subroutine references or names of filters provided by the supplementary Inline::Filters module.
+
+Your source code will be filtered just before it is parsed by Inline. The MD5 fingerprint is generated before filtering. Source code filters can be used to do things like stripping out POD documentation, pre-expanding #include statements or whatever else you please. For example:
+
+    use Inline C => DATA =>
+               FILTERS => [Strip_POD => \&MyFilter => Preprocess ];
+
+Filters are invoked in the order specified. See L<Inline::Filters> for more information.
+
 =head2 INC
 
 Specifies an include path to use. Corresponds to the MakeMaker parameter.
@@ -191,6 +202,8 @@ A special macro to indicate that you really don't want to return anything. Same 
 
     Inline_Stack_Return(0);
 
+Please note that this macro actually B<returns> from your function. 
+
 =back
 
 Each of these macros is available in 3 different styles to suit your coding tastes. The following macros are equivalent.
@@ -201,7 +214,7 @@ Each of these macros is available in 3 different styles to suit your coding tast
 
 All of this functionality is available through XS macro calls as well. So why duplicate the functionality? There are a few reasons why I decided to offer this set of macros. First, as a convenient way to access the Stack. Second, for consistent, self documenting, non-cryptic coding. Third, for future compatibility. It occured to me that if a lot of people started using XS macros for their C code, the interface might break under Perl6. By using this set, hopefully I will be able to insure future compatibility of argument handling.
 
-Of course, if you use the rest of the Perl API, your code will most likely break under Perl6. So this is not a 100% guarantee. But since argument handling is the most common interface you're likely to use, it seemed like a wise thinng to do.
+Of course, if you use the rest of the Perl API, your code will most likely break under Perl6. So this is not a 100% guarantee. But since argument handling is the most common interface you're likely to use, it seemed like a wise thing to do.
 
 =head1 Writing C Subroutines
 
@@ -255,7 +268,7 @@ In this category you have both a C<void> return type and an unfixed number of ar
 
 =head1 Examples
 
-Here is a few examples. Each one is a complete program that you can try running yourself. For many more examples see L<Inline::C-Cookbook>.
+Here are a few examples. Each one is a complete program that you can try running yourself. For many more examples see L<Inline::C-Cookbook>.
 
 =head2 Example #1 - Greetings
 
@@ -320,13 +333,25 @@ Inline's mailing list is inline@perl.org
 
 To subscribe, send email to inline-subscribe@perl.org
 
+=head1 BUGS AND DEFICIENCIES
+
+=over 4
+
+=item 1
+
+If you use C function names that happen to be used internally by Perl, you will get a load error at run time. There is currently no functionality to prevent this or to warn you. For now, a list of Perl's internal symbols is packaged in the Inline module distribution under the filename C<'symbols.perl'>. Avoid using these in your code.
+
+=back
+
 =head1 AUTHOR
 
 Brian Ingerson <INGY@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001, Brian Ingerson. All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
+Copyright (c) 2000, 2001. Brian Ingerson. All rights reserved.
+
+This program is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 
 See http://www.perl.com/perl/misc/Artistic.html
 

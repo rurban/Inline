@@ -1,20 +1,20 @@
 package Inline;
-
+ 
 use strict;
 require 5.005;
-$Inline::VERSION = '0.32';
+$Inline::VERSION = '0.33';
 
 use Inline::messages;
 use Config;
 use Carp;
 use Digest::MD5 qw(md5_hex);
 use Cwd qw(abs_path cwd);
-use FindBin;
 
 my %CONFIG = ();
 my @DATA_OBJS = ();
 my $INIT = 0;
-my $version_printed;
+my $version_requested = 0;
+my $version_printed = 0;
 my $untaint = 0;
 my $safemode = 0;
 
@@ -78,21 +78,20 @@ sub import {
 	return handle_with($pkg, @_);
     }
     elsif ($control eq 'Config') {
-	return handle_config($pkg, @_);
+	return handle_global_config($pkg, @_);
     }
     elsif ($shortcuts{uc($control)}) {
 	handle_shortcuts($pkg, $control, @_);
-	if ($CONFIG{$pkg}{template}{PRINT_VERSION}) {	
-	    print_version();
-	    exit;
-	}
-	return 1;
+	$version_requested = $CONFIG{$pkg}{template}{PRINT_VERSION};
+	return;
     }
     elsif ($control =~ /^\S+$/ and $control !~ /\n/) {
 	my $language_id = $control;
 	my $option = shift || '';
-	my %config = @_;
-	for (keys %config) {
+	my @config = @_;
+	my $next = 0;
+	for (@config) {
+	    next if $next++ % 2;
 	    croak usage if /[\s\n]/;
 	}
 	$o = bless {
@@ -102,17 +101,17 @@ sub import {
 		    language_id => $language_id,
 		   }, $class;
 	if ($option eq 'DATA' or not $option) {
-	    $o->{config} = {%config};
+	    $o->{config} = handle_language_config(@config);
 	    push @DATA_OBJS, $o;
 	    return;
 	}
 	elsif ($option eq 'Config') {
-	    $CONFIG{$pkg}{$language_id} = {%config};
+	    $CONFIG{$pkg}{$language_id} = handle_language_config(@config);
 	    return;
 	}
 	else {
 	    $o->receive_code($option);
-	    $o->{config} = {%config};
+	    $o->{config} = handle_language_config(@config);
 	}
     }
     else {
@@ -125,11 +124,11 @@ sub import {
 # Run time version of import (public method)
 #==============================================================================
 sub bind {
-    croak usage_bind_runtime unless $INIT; 
-
+#    croak usage_bind_runtime unless $INIT; 
+#
     local $/ = "\n"; local $\; local $" = ' '; local $,;
 
-    my ($code, %config);
+    my ($code, @config);
     my $o;
     my ($pkg, $script) = caller;
     my $class = shift;
@@ -142,14 +141,16 @@ sub bind {
 	croak usage_bind 
 	  unless ($language_id =~ /^\S+$/ and $language_id !~ /\n/);
 	$code = shift or croak usage_bind;
-	%config = @_;
+	@config = @_;
     }
     else {
 	pop @_;
 	$code = [@_];
     }
 	
-    for (keys %config) {
+    my $next = 0;
+    for (@config) {
+	next if $next++ % 2;
 	croak usage_bind if /[\s\n]/;
     }
     $o = bless {
@@ -159,7 +160,7 @@ sub bind {
 		language_id => $language_id,
 	       }, $class;
     $o->receive_code($code);
-    $o->{config} = {%config};
+    $o->{config} = handle_language_config(@config);
 
     $o->glue;
 }
@@ -191,6 +192,7 @@ sub init {
 
 sub END {
     warn usage_init if @DATA_OBJS;
+    print_version() if $version_requested && not $version_printed;
 }
 
 #==============================================================================
@@ -212,6 +214,7 @@ sub glue {
     $o->check_module;
 
     $o->untaint_object if UNTAINT;
+    print_version() if $version_requested;
     $o->reportbug() if $o->{config}{REPORTBUG};
     if ($o->{config}{PRINT_INFO} or
 	$o->{config}{FORCE_BUILD} or
@@ -296,7 +299,6 @@ sub read_DATA {
 	}
     }
     while (<Inline::DATA>) {
-	last if /^\=\w+/;
 	if (/^__(\S+)__\r?$/) {
 	    $DATA{$pkg} = $1;
 	    last;
@@ -420,15 +422,13 @@ sub create_config_file {
 	    next unless $mod =~ /\.pm$/;
 	    $mod =~ s/\.pm$//;
 	    next LIB if ($checked{$mod}++);
-	    next if $mod eq 'messages'; # Skip Inline::messages
 	    if ($mod eq 'Config') {     # Skip Inline::Config
-		warn usage_Config if $^W;
+		warn usage_Config;
 		next;
 	    }
-	    next if $mod eq 'Files';
 	    ($mod) = $mod =~ /(.*)/ if UNTAINT;
 	    eval "require Inline::$mod;\$register=&Inline::${mod}::register";
-	    croak usage_register($mod, $@) if $@;
+	    next if $@;
 	    my $language = $register->{language} 
 	    or croak usage_register($mod);
 	    for (@{$register->{aliases}}) {
@@ -438,9 +438,6 @@ sub create_config_file {
 	    }
 	    $languages{$language} = $language;
 	    $types{$language} = $register->{type};
-	    croak usage_register($mod, "Bad language type")
-	      unless ($types{$language} eq 'compiled' or
-		      $types{$language} eq 'interpreted');
 	    $modules{$language} = "Inline::$mod";
 	    $suffixes{$language} = $register->{suffix};
 	}
@@ -590,14 +587,14 @@ sub deprecated_import {
     local $/ = "\n"; local $\; local $" = ' '; local $,;
     
     my ($class, $language, @lines) = @_;
-    croak usage_import unless ($class eq 'Inline' and
-			       $language eq 'C' and
-			       @lines);
+    $INIT = 0, goto &import unless ($class eq 'Inline' and
+				    $language eq 'C' and
+				    @lines);
     for (@lines) {
 	croak usage_import unless /\n/;
     }
 
-    warn usage_deprecated_import if $^W;
+    warn usage_deprecated_import;
     push @_, '_deprecated_import_';
     goto &bind;
 }
@@ -617,17 +614,47 @@ sub handle_with {
 }
 
 #==============================================================================
-# Process the config options
+# Process the config options that apply to all Inline sections
 #==============================================================================
-sub handle_config {
+sub handle_global_config {
     my $pkg = shift;
     while (@_) {
 	my ($key, $value) = (shift, shift);
 	croak usage if $key =~ /[\s\n]/;
+	$key = $value if $key =~ /^(ENABLE|DISABLE)$/;
 	croak "Invalid Config option '$key'\n"
-	  unless defined ${$default_config}{$key};
-	$CONFIG{$pkg}{template}{$key} = $value;
+	  unless defined $ {$default_config}{$key};
+	if ($key eq 'ENABLE') {
+	    $CONFIG{$pkg}{template}{$value} = 1;
+	}
+	elsif ($key eq 'DISABLE') {
+	    $CONFIG{$pkg}{template}{$value} = 0;
+	}
+	else {
+	    $CONFIG{$pkg}{template}{$key} = $value;
+	}
     }
+}
+
+#==============================================================================
+# Process the config options that apply to a particular language
+#==============================================================================
+sub handle_language_config {
+    my @values;
+    while (@_) {
+	my ($key, $value) = (shift, shift);
+	croak usage if $key =~ /[\s\n]/;
+	if ($key eq 'ENABLE') {
+	    push @values, $value, 1;
+	}
+	elsif ($key eq 'DISABLE') {
+	    push @values, $value, 0;
+	}
+	else {
+	    push @values, $key, $value;
+	}
+    }
+    return {@values};
 }
 
 #==============================================================================
@@ -685,7 +712,10 @@ sub untaint_object {
     for (keys %ENV) {
 	($ENV{$_}) = $ENV{$_} =~ /(.*)/;
     }
-    $ENV{PATH} = join ':', grep {not /^\./} split /\:/, $ENV{PATH};
+    my $delim = $^O eq 'MSWin32' ? ';' : ':';
+    $ENV{PATH} = join $delim, grep {not /^\./ and
+				      not ((stat($_))[2] & 0022)
+				} split $delim, $ENV{PATH};
     map {($_) = /(.*)/} @INC;
 }
 
@@ -741,6 +771,24 @@ sub error_copy {
 }
 
 #==============================================================================
+# Apply a list of filters to the source code
+#==============================================================================
+sub filter {
+    my $o = shift;
+    my $new_code = $o->{code};
+    for (@_) {
+	croak "Invalid filter '$_' is not a reference\n" unless ref;
+	if (ref eq 'CODE') {
+	    $new_code = $_->($new_code);
+	}
+	else {
+	    $new_code = $_->filter($o, $new_code);
+	}
+    }
+    return $new_code;
+}
+
+#==============================================================================
 # User wants to report a bug
 #==============================================================================
 sub reportbug {
@@ -778,7 +826,7 @@ END
 	%versions = map {eval "use $_();"; ($_, $ {$_ . '::VERSION'})}
 	qw (Data::Dumper Digest::MD5 Parse::RecDescent 
 	    ExtUtils::MakeMaker File::Path FindBin 
-	    Inline Inline::Config
+	    Inline
 	   );
     }
 
@@ -877,7 +925,7 @@ sub mkpath {
     use strict;
     my ($o, $mkpath) = @_;
     my @parts = grep {$_} split(/\//,$mkpath);
-    my $path = ($parts[0] =~ /^[A-Z]:$/)
+    my $path = ($parts[0] =~ /^[A-Za-z]:$/)
       ? shift(@parts) . '/'  #MSWin32 Drive Letter (ie C:)
 	: '/';
     foreach (@parts){
@@ -959,7 +1007,8 @@ sub find_temp_dir {
 	   -w "$cwd/.Inline/") {
 	$temp_dir = "$cwd/.Inline/";
     }
-    elsif ($bin = $FindBin::Bin and
+    elsif (require FindBin and
+           $bin = $FindBin::Bin and
 	   -d "$bin/.Inline/" and
 	   -w "$bin/.Inline/") {
 	$temp_dir = "$bin/.Inline/";

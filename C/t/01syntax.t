@@ -1,5 +1,9 @@
+use lib qw(../blib/lib ./blib/lib);
 use strict;
 use Test;
+use diagnostics;
+use Inline Config => DIRECTORY => './_Inline_test';
+
 BEGIN {
     plan(tests => 5, 
 	 todo => [],
@@ -53,12 +57,6 @@ __C__
 int multiply(int x, int y) {
     return x * y;
 }
-
-=head1 NAME
-
-Divide - A divide function in C
-
-=cut
 
 __C__
 

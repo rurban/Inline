@@ -1,5 +1,8 @@
+use lib qw(./blib/lib .);
 use strict;
 use Test;
+use diagnostics;
+
 BEGIN {
     plan(tests => 1, 
 	 todo => [],
@@ -9,17 +12,16 @@ BEGIN {
     delete $ENV{HOME};
 }
 
-use Inline 'C';
-
 # test 1
 # Make sure Inline can generate a new _Inline/ directory.
 # (But make sure it's in our own space.)
+use Inline 'Foo';
 ok(add(3, 7) == 10);
 
 __END__
 
-__C__
+__Foo__
 
-int add(int x, int y) {
-    return x + y;
+foo-sub add {
+    foo-return $_[0] + $_[1];
 }
