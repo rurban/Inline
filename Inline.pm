@@ -3,10 +3,10 @@ package Inline;
 require 5.005;                # Parse::RecDescent requires this.
 use strict;
 use vars qw($VERSION @ISA);
-use AutoLoader 'AUTOLOAD';
+require AutoLoader;
 require DynaLoader;
 @ISA = qw(DynaLoader AutoLoader);
-$VERSION = '0.23';
+$VERSION = '0.24';
 
 use Inline::Config;
 use Config;
@@ -196,6 +196,52 @@ sub dynaload {
 	bootstrap $module 
           or croak("Had problems bootstrapping $module");
 END
+}
+
+#==============================================================================
+# This routine fixes problems with the MakeMaker Makefile.
+# Yes, it is a kludge, but it is a necessary one.
+# 
+# ExtUtils::MakeMaker cannot be trusted. It has extremely flaky behaviour
+# between releases and platforms. I have been burned several times.
+#
+# Doing this actually cleans up other code that was trying to guess what
+# MM would do. This method will always work.
+# And, at least this only needs to happen at build time, when we are taking 
+# a performance hit anyway!
+#==============================================================================
+# Why can't this be autoloaded? :-(   (Breaks "make test")
+#==============================================================================
+sub fix_make {
+    use strict;
+    my %fixes = (
+		 INSTALLSITEARCH => 'install_lib',
+		 INSTALLDIRS => 'installdirs',
+		);
+	     
+    my (@lines, $fix);
+    my $o = shift;
+
+    $o->{installdirs} = 'site';
+    
+    open(MAKEFILE, "< $o->{build_dir}Makefile")
+      or croak "Can't open Makefile for input: $!\n";
+    @lines = <MAKEFILE>;
+    close MAKEFILE;
+
+    open(MAKEFILE, "> $o->{build_dir}Makefile")
+      or croak "Can't open Makefile for output: $!\n";
+    for (@lines) {
+	if (/^(\w+)\s*=\s*\S*\s*$/ and
+	    $fix = $fixes{$1}
+	   ) {
+	    print MAKEFILE "$1 = $o->{$fix}\n"
+	}
+	else {
+	    print MAKEFILE;
+	}
+    }
+    close MAKEFILE;
 }
 
 1;
@@ -516,12 +562,12 @@ sub compile {
     $cwd = cwd;
     chdir $build_dir;
     for $cmd ("$perl Makefile.PL > out.Makefile_PL 2>&1",
-		 \ &fix_make,   # Fix Makefile problems
+		 \ 1,   # Fix Makefile problems
 		 "$make > out.make 2>&1",
 		 "$make install > out.make_install 2>&1",
 		) {
 	if (ref $cmd) {
-	    $o->$cmd();
+	    $o->fix_make();
 	}
 	else {
 	    system($cmd) and croak <<END;
@@ -549,50 +595,6 @@ END
 	unlink "$install_lib/auto/$modpname/$modfname.exp"; #MSWin32
 	unlink "$install_lib/auto/$modpname/$modfname.lib"; #MSWin32
     }
-}
-
-#==============================================================================
-# This routine fixes problems with the MakeMaker Makefile.
-# Yes, it is a kludge, but it is a necessary one.
-# 
-# ExtUtils::MakeMaker cannot be trusted. It has extremely flaky behaviour
-# between releases and platforms. I have been burned several times.
-#
-# Doing this actually cleans up other code that was trying to guess what
-# MM would do. This method will always work.
-# And, at least this only needs to happen at build time, when we are taking 
-# a performance hit anyway!
-#==============================================================================
-my %fixes = (
-	     INSTALLSITEARCH => 'install_lib',
-	     INSTALLDIRS => 'installdirs',
-	    );
-	     
-sub fix_make {
-    use strict;
-    my (@lines, $fix);
-    my $o = shift;
-
-    $o->{installdirs} = 'site';
-    
-    open(MAKEFILE, "< $o->{build_dir}Makefile")
-      or croak "Can't open Makefile for input: $!\n";
-    @lines = <MAKEFILE>;
-    close MAKEFILE;
-
-    open(MAKEFILE, "> $o->{build_dir}Makefile")
-      or croak "Can't open Makefile for output: $!\n";
-    for (@lines) {
-	if (/^(\w+)\s*=\s*\S*\s*$/ and
-	    $fix = $fixes{$1}
-	   ) {
-	    print MAKEFILE "$1 = $o->{$fix}\n"
-	}
-	else {
-	    print MAKEFILE;
-	}
-    }
-    close MAKEFILE;
 }
 
 #==============================================================================

@@ -1,6 +1,6 @@
 =head1 NAME
 
-B<Inline> - Use other languages inside your Perl scripts and modules.
+B<Inline> - Use other programming languages inside your Perl scripts and modules.
 
 =head1 SYNOPSIS
 
@@ -116,7 +116,11 @@ Since C<Inline> is coded in a "C<use>" statement, everything is done during Perl
 
 =item 2) Check if the Source Code has been Compiled
 
-C<Inline> only needs to compile the source code if it has not yet been compiled. It accomplishes this seemingly magical task in an extremely simple and straightforward manner. It runs the source text through the C<Digest::MD5> module to produce a 128-bit "fingerprint" which is virtually unique. The fingerprint (in hex) is combined with the current package name (and the script name, if the package is "C<main>") to form a unique name for the executable module (shared object). If an executable with that name already exists, then proceed to step 8. (No compilation is necessary)
+C<Inline> only needs to compile the source code if it has not yet been compiled. It accomplishes this seemingly magical task in an extremely simple and straightforward manner. It runs the source text through the C<Digest::MD5> module to produce a 128-bit "fingerprint" which is virtually unique. The fingerprint (in hex) is I<mangled> with the current package name (and the script name, if the package is "C<main>") along with the name of the programming language, to form a unique name for the executable module. For instance, the C<C> code from C<examples/example001.pl> (see L<"Examples In C">) would mangle into:
+
+ main_C_example001_pl_3a9a7ba88a8fb10714be625de5e701f1.so
+
+If an executable with that name already exists, then proceed to step 8. (No compilation is necessary)
 
 =item 3) Find a Place to Build and Install
 

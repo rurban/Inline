@@ -1,6 +1,6 @@
 NAME
-    Inline - Use other languages inside your Perl scripts and
-    modules.
+    Inline - Use other programming languages inside your Perl
+    scripts and modules.
 
 SYNOPSIS
         print "9 + 16 = ", add(9, 16), "\n";
@@ -177,12 +177,17 @@ DESCRIPTION
         task in an extremely simple and straightforward manner. It
         runs the source text through the `Digest::MD5' module to
         produce a 128-bit "fingerprint" which is virtually unique.
-        The fingerprint (in hex) is combined with the current
+        The fingerprint (in hex) is *mangled* with the current
         package name (and the script name, if the package is
-        "`main'") to form a unique name for the executable module
-        (shared object). If an executable with that name already
-        exists, then proceed to step 8. (No compilation is
-        necessary)
+        "`main'") along with the name of the programming language,
+        to form a unique name for the executable module. For
+        instance, the `C' code from `examples/example001.pl' (see
+        the section on "Examples In C") would mangle into:
+
+         main_C_example001_pl_3a9a7ba88a8fb10714be625de5e701f1.so
+
+        If an executable with that name already exists, then proceed
+        to step 8. (No compilation is necessary)
 
     3) Find a Place to Build and Install
         At this point we know we need to compile the source code.

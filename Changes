@@ -1,5 +1,8 @@
 Revision history for Perl extension Inline.
 
+0.24  Fri Aug 18 03:03:06 PDT 2000
+	- Fixed Autoload bug found during "make test" of Inline installation.
+
 0.23  Wed Aug 16 18:10:07 PDT 2000
         - Added support for MSWin32 operating systems which use the MicroSoft Visual C++ compiler.
 

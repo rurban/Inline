@@ -1,6 +1,6 @@
 <HTML>
 <HEAD>
-<TITLE>B<Inline> - Use other languages inside your Perl scripts and modules.</TITLE>
+<TITLE>B<Inline> - Use other programming languages inside your Perl scripts and modules.</TITLE>
 <LINK REV="made" HREF="mailto:ingy@armstrong.local.home">
 </HEAD>
 
@@ -50,7 +50,7 @@
 <P>
 <H1><A NAME="NAME">NAME</A></H1>
 <P>
-<STRONG>Inline</STRONG> - Use other languages inside your Perl scripts and modules.
+<STRONG>Inline</STRONG> - Use other programming languages inside your Perl scripts and modules.
 
 <P>
 <HR>
@@ -243,9 +243,14 @@ options in the <CODE>Inline::Config</CODE> module.
 <CODE>Inline</CODE> only needs to compile the source code if it has not yet been compiled. It
 accomplishes this seemingly magical task in an extremely simple and
 straightforward manner. It runs the source text through the <CODE>Digest::MD5</CODE> module to produce a 128-bit ``fingerprint'' which is virtually unique. The
-fingerprint (in hex) is combined with the current package name (and the
-script name, if the package is ``<CODE>main</CODE>'') to form a unique name for the executable module (shared object). If an
-executable with that name already exists, then proceed to step 8. (No
+fingerprint (in hex) is <EM>mangled</EM> with the current package name (and the script name, if the package is ``<CODE>main</CODE>'') along with the name of the programming language, to form a unique name
+for the executable module. For instance, the <CODE>C</CODE> code from <CODE>examples/example001.pl</CODE> (see <A HREF="#Examples_In_C">Examples In C</A>) would mangle into:
+
+<P>
+<PRE> main_C_example001_pl_3a9a7ba88a8fb10714be625de5e701f1.so
+</PRE>
+<P>
+If an executable with that name already exists, then proceed to step 8. (No
 compilation is necessary)
 
 <LI><STRONG><A NAME="item__Find_a_Place_to_Build_and_Inst">) Find a Place to Build and Install</A></STRONG>
