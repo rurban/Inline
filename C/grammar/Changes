@@ -1,0 +1,5 @@
+Revision history for Perl extension Inline::C::grammar.
+
+0.30  Fri Dec  8 01:55:43 PST 2000
+	- Created a separate module for the Inline::C Parse::RecDescent
+	grammar.

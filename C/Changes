@@ -1,0 +1,4 @@
+Revision history for Perl extension Inline::C.
+
+0.30  Fri Dec  8 01:55:43 PST 2000
+	- Created Inline::C. Separated C code from Inline 0.26

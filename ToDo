@@ -1,37 +1,95 @@
+### BUGS ###
++ 'INFO' barfs on no valid bindings.
++ "use Inline C => 'code', BLIB => 'foo'" creates a new 'blib_I' directory.
+
 ### TESTING ###
-# Add tests to harness
-# Beef up testing
-# Use ./mktest on Windows w/ Cygwin
-# Test on native Windows box
-# Test each new typemap type
++ Force BLIB to './blib_test' in tests to prevent 'Schwartzian' install bug
+- Add tests to harness
+  + syntax
+  + perlapi
+    + perl_get_sv
+  + init
+  - event
+  - config
+  - import
++ Test on native Windows box
+<0.40> Test each new typemap type
+
+### Inline::C ###
+<0.40> Make INLINE.h a separate file if possible.
+<0.40> Don't bind functions marked static. Warn on failure to bind any non-static function.
++ Warn if no functions bind to Perl
+<0.40> Add NOWARN option
++ Test Harness
+
+### Inline::CPR - C Perl Run ###
++ Write the CPR interpreter
+<0.40> Move CPR.h into a separate file.
++ Fix the Makefile to not compile every time.
++ Add initial header/macro support for CPR
++ Test harness
++ Fix hashbang generation for synopsis.cpr script.
 
 ### DEBUGGING ###
-# Add features for easier user debugging
++ Copy files to 'errors' directory under blib_I
+<0.40> Add interactive mode when PERL_INLINE_DEBUG=interactive
 
 ### Event.pm ###
-# Add Event.pm findings to doc
-# Work with Joshua Pritikin to enhance for Event.pm
-# Investigate "use Inline with => Event, Foo;" syntax
++ Work with Joshua Pritikin to enhance for Event.pm
++ Investigate "use Inline with => Event, Foo;" syntax
+x Check Inline version when using 'with =>' syntax.
 
 ### REWORKING ###
-# Use "sub INIT {" to delay compilation.
-# Make Inline::Config more OO. Allow multiple packages to use different configs
-# Deprecate the use of global config variables (use methods only)
++ Autodetect new Inline::Foo languages.
++ Use "sub INIT {" to delay compilation.
++ Make configuration more OO. Allow multiple packages to use different configs
++ Deprecate the use of global config variables (use methods only)
++ Add bind(C => "string") method for runtime imports.
++ Support old import syntax with warning.
++ Make more specific usage messages.
++ Prevent user from saying 'use Inline::C'. Check in Inline::import() which will get inherited as Inline::C::import()
++ Clean up the Inline object structure.
++ Make sure the public interface is clean.
+<0.40> Lookup function names and warn of possible conflicts. (nm perl)
+<0.40> Add Makefile.PL support so that extension module authors can easily create binary distributions.
+<0.40> Try hiding MD5 hash in cached object.
++ If user specifies BLIB, don't check for writable until build time. This allows precaching in CGI.
+
+### Configuration
++ Detect package Inline::Config and croak;
++ Add VERSION shortcut
++ Add BOOT option to Inline::C
+<0.40> Add MANGLE option to Inline::C (use with PREFIX option)
++ Add PREFIX option to Inline::C
++ Make all options work with string and array forms.
++ Use 'undef resetting' for all additive options. 
 
 ### SYNTAX ###
-# Allow "use Inline from => 'DATA';" and __C__ or __Fortran__ etc.
-# Make Inline work with AutoLoader
-# Allow mixture of POD and Inline code in __DATA__
++ Allow "use Inline from => 'DATA';" and __C__ or __Fortran__ etc.
++ Make Inline work with AutoLoader
++ Allow mixture of POD and Inline code in __DATA__
 
 ### TYPEMAPPING ###
-# Add functionality to specify new types in perl code instead of typemaps.
+<0.40> Add functionality to specify new types in perl code instead of typemaps.
+<0.40> Allow override Makefile.PL files
+<0.40> Add support for drop in typemap files
+<0.40> Write Inline::C::Typemap
 
 ### CLEANUP ###
-# Work out a method to clean old shared objects out of 'site_perl' when new versions are installed. Should prolly be invoked by "make install".
+<0.40> Work out a method to clean old shared objects out of 'site_perl' when new versions are installed. Should prolly be invoked by "make install".
 
 ### INVESTIGATE ###
-# How to access symbols across separate inlined modules. (extern?)
+x How to access symbols across separate inlined modules. (Can't do it easily/portably)
 
-### C Perl Run (CPR) ###
-# Add initial support for CPR
-# Write the CPR interpreter
+### Documentation ###
++ Inline (Rework)
++ Inline-API
++ Inline-Support
++ Inline::C
++ Document list of names that causes conflicts.
++ Inline::C::Cookbook
++ Inline::CPR
+
+### Release ###
++ Remove Data::Dumper and other development artifacts
+<0.40> Try to use some Autoloading.

@@ -1,0 +1,70 @@
+INTRODUCTION:
+
+Inline::C - Write Perl subroutines in C.
+
+Inline::C is the Inline Language Support Module (ILSM) for C
+
+Example:
+
+    use Inline C => <<'END';
+    SV* JAxH(char* x) {
+        return newSVpvf ("Just Another %s Hacker",x);
+    }
+    END
+    
+    print JAxH('Inline'), "\n";
+
+When run, this complete program prints:
+
+    Just Another Inline Hacker
+
+-------------------------------------------------------------------------------
+FEATURES:
+
+Inline::C version 0.30 is a major upgrade from previous verions. It includes:
+
++ Integrated support for typemap files in C.
+  + All the recognized types now come *only* from typemaps. 
+  + The default types come from the default typemap installed with core Perl.
+  + Typemaps are used to modify the Parse::RecDescent grammar for parsing C.
++ Inline::C completely separated from base Inline code.
++ Inline::C is now beta status
++ Inline::C::grammar is a separate module
++ Much easier and more powerful configuration syntax.
++ More XS and MakeMaker features exposed for configuration.
++ Support for using Inline 'with' Event.pm for C callbacks.
++ More documentation
+  + perldoc Inline::C
+  + perldoc Inline::C-Cookbook
++ Better error messages and easier debugging.
+
+Other features of Inline::C include:
+
+= Support for Perl Stack Handling
+= Works on all Unix and MS Windows configurations.
+
+-------------------------------------------------------------------------------
+INSTALLATION:
+
+This module requires the Inline module with which it is distributed. It also
+requires the appropriate C compiler. (Where appropriate means the one referred
+to in your Config.pm) 
+
+Inline::C is installed automatically with Inline.pm.
+
+-------------------------------------------------------------------------------
+INFORMATION:
+
+= For more infor on Inline, see 'perldoc Inline' and 'perldoc Inline-Support'
+= For information about Inline::, see 'perldoc Inline::C' and
+  'perldoc Inline::C-Cookbook'
+= For information on writing your own Inline extension see 'perldoc Inline-API'
+= For information about the Perl5 internal C API, see 'perldoc perlapi' or
+  try http://www.perldoc.com/perl5.6/pod/perlapi.html
+
+The Inline.pm mailing list is inline@perl.org. 
+Send email to inline-subscribe@perl.org to subscribe.
+
+Please send questions and comments to "Brian Ingerson" <INGY@cpan.org>
+
+Copyright (c) 2000, Brian Ingerson. All Rights Reserved.  

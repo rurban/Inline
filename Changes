@@ -1,6 +1,14 @@
 Revision history for Perl extension Inline.
 
-0.30  Thu Sep 14 20:51:11 PDT 2000
+0.30  Fri Dec  8 02:00:17 PST 2000
+	- Major reworking of Inline.pm
+	Sweeping changes to:
+	- Configuaration
+	- Syntax
+	- Language integration
+	Too much to list here. See ToDo
+
+0.26  Thu Sep 14 20:51:11 PDT 2000
 	- localize $/ and $\ to shield them from things like 'perl -l'.
 	Thanks Michael Schwern.
 

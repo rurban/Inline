@@ -8,4 +8,5 @@ WriteMakefile(
 			    Digest::MD5 => 2.09,
 			    Parse::RecDescent => 1.78,
 			   },
+	      clean => {FILES => 'blib_test/ blib_I/'},
 	     );

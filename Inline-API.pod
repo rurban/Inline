@@ -1,0 +1,345 @@
+=head1 NAME
+
+Inline-API - How to bind a programming language to Perl using Inline.pm
+
+=head1 SYNOPSIS
+
+    #!/usr/bin/perl
+    
+    say_it('foo');  # Use Foo++ to print "Hello, Foo"
+    
+    use Inline Foo => <<'EOFOO';
+    
+      /FOO  This is a function written in Foo++  OOF/    
+    
+      deefoon foonkshun say_it 
+        < fooprint "Hello,", arrrg(0) >
+    
+    EOFOO
+
+=head1 DESCRIPTION
+
+So you think Inline C is pretty cool, but what you really need is for Perl to work with the brand new programming language "Foo++". Well you're in luck. C<Inline.pm> has support for adding your own Inline Language Support Module (B<ILSM>), like C<Inline::Foo>.
+
+C<Inline> has always been intended to work with lots of different programming languages. Many of the details can be shared between implementations, so that C<Inline::Java> has a similar interface to C<Inline::Fortran>. All of the common code is in C<Inline.pm>. 
+
+Language specific modules like C<Inline::Python> are subclasses of C<Inline.pm>. They can inherit as much of the common behaviour as they want, and provide specific behaviour of their own. This usually comes in the form of Configuration Options and language specific compilation.
+
+The C<Inline> C support is probably the best boilerplate to copy from. Since version 0.30 all C support was isolated into the module C<Inline::C> and the parsing grammar is further broken out into C<Inline::C::grammar>. All of these components come with the C<Inline> distribution.
+
+This POD gives you all the details you need for implementing an ILSM. For further assistance, contact inline@perl.org See L<"SEE ALSO"> below.
+
+=head1 A Skeleton
+
+For the remainder of this tutorial, let's assume we're writing an ILSM for the ficticious language C<Foo++>. We'll call it C<Inline::Foo>. Here is the skeleton Perl code you'll need to implement it.
+
+    package Inline::Foo;
+    
+    use strict;
+    require Inline;
+    require Inline::Foo::grammar;
+    use Parse::RecDescent;
+    use Config;
+    use Carp;
+    
+    $Inline::Foo::VERSION = '0.05';
+    @Inline::Foo::ISA = qw(Inline);
+    
+    #===========================================================
+    # Register Foo++ as an Inline Language Support Module (ILSM)
+    #===========================================================
+    sub register {
+        return {
+                language => 'Foo',
+                aliases => ['Foo++', 'F++'],
+                type => 'compiled',
+                suffix => $Config{so},
+               };
+    }
+    
+    #==================================
+    # Validate the Foo++ Config Options
+    #==================================
+    sub validate {
+        my $o = shift; # This is the Inline object
+    
+        $o->{Foo} = {};
+        while (@_) {
+        my ($key, $value) = (shift, shift);
+        if ($key eq 'BAR') {
+            $o->{Foo}{BAR} = $value;  # Store config value in object
+            next;
+        }
+        if ($key eq 'BAZ') {
+            $o->{Foo}{BAZ} = $value;
+            next;
+        }
+        croak "'$key' is not a valid config option for Inline::Foo\n";
+        }
+    }
+    
+    #=============================
+    # Parse and compile Foo++ code
+    #=============================
+    sub build {
+        my $o = shift;
+        $o->parse;
+        $o->compile;
+    }
+    
+    #======================================
+    # Only needed for interpreted languages
+    #======================================
+    sub load {
+        my $o = shift;
+    }
+    
+    #============================================
+    # Return a small report about the Foo++ code.
+    #============================================
+    sub info {
+        my $o = shift;
+        my $text = <<'END';
+    This is a small report about the Foo++ code. Perhaps it contains
+    information about the functions the parser found which will be
+    bound to Perl. It will get included in the text produced by the
+    Inline 'INFO' command.
+    END
+        return $text;
+    }
+
+Except for C<load()>, the subroutines in this code are mandatory for an ILSM. What they do is described below. A few things to note:
+
+=over 4
+
+=item 1
+
+C<Inline::Foo> must be a subclass of C<Inline>. This is accomplished with:
+
+    @Inline::Foo::ISA = qw(Inline);
+
+=item 2
+
+The line 'C<require Inline;>' is not necessary. But it is there to remind you not to say 'C<use Inline;>'. This will not work.
+
+=item 3
+
+Remember, it is not valid for a user to say:
+
+    use Inline::Foo;
+
+C<Inline.pm> will detect such usage for you in its C<import> method, which is automatically inherited since C<Inline::Foo> is a subclass.
+
+=item 4
+
+It is not necessary to implement your parsing with C<Parse::RecDesect>. But I recommend it. :-)
+
+=back
+
+=head1 The Inline API
+
+This section is a more formal specification of what functionality you'll need to provide to implement an ILSM.
+
+When C<Inline> determines that some C<Foo++> code needs to be compiled it will automatically load your module. It will then call various subroutines which you need to supply. We'll call these subroutines "callbacks".
+
+You will need to provide the following 5 callback subroutines. 
+
+=head2 The register() Callback
+
+This subroutine receives no arguments. It returns a reference to a hash of ILSM meta-data. C<Inline> calls this routine only when it is trying to detect new ILSM-s that have been installed on a given system. Here is an example of the has ref you would return for Foo++:
+
+    {
+     language => 'Foo',
+     aliases => ['Foo++', 'F++'],
+     type => 'compiled',
+    };
+
+The meta-data items have the following meanings:
+
+=over 4
+
+=item language
+
+This is the proper name of the language. It is usually implemented as C<Inline::X> for a given language 'X'.
+
+=item aliases
+
+This is a reference to an array of language name aliases. The proper name of a language can only contain word characters. [A-Za-z0-9_] An alias can contain any characters except whitespace and quotes. This is useful for names like 'C++' and 'C#'.
+
+=item type
+
+Must be set to 'compiled' or 'interpreted'. Indicates the category of the language.
+
+=item suffix
+
+This is the file extension for the cached object that will be created. For 'compiled' languages, it will probably be 'so' or 'dll'. The appropriate value is in C<Config.pm>.
+
+For interpreted languages, this value can be whatever you want. Python uses C<pydat>.
+
+=back
+
+=head2 The validate() Callback
+
+This routine gets passed all configuration options that were not already handled by the base C<Inline> module. The options are passed as key/value pairs. It is up to you to validate each option and store its value in the C<Inline> object (which is also passed in). If a particular option is invalid, you should croak with an appropriate error message.
+
+=head2 The build() Callback
+
+This subroutine is responsible for doing the parsing and compilation of the Foo++ source code. The C<Inline> is passed as the only argument. All pertinent information will be stored in this object. C<build()> is required to create a shared object of a specific name, or to craok with an appropriate error message. 
+
+This is the meat of your ILSM. Since it will most likely be quite complicated, it is probably best that you study an existing ILSM like C<Inline::C>.
+
+=head2 The load() Callback
+
+This method only needs to be provided for interpreted languages. It's responsibility is to start the interpreter.
+
+For compiled languages, the load routine from C<Inline.pm> is called which uses C<DynaLoader> to load the shared object or DLL. 
+
+=head2 The info() Callback
+
+This method is called when the user makes use of the C<INFO> shortcut. You should return a string containing a small report about the Inlined code.
+
+=head1 The Inline Object
+
+C<Inline.pm> creates a hash based Perl object for each section of Inlined source code it receives. This object contains lots of information about the code, the environment, and the configuration options used. You are free to store any additional information in the object.
+
+To prevent naming clashes with future version of C<Inline> you use a subhash under the key 'Foo' (The name of your language). This is the convention.
+
+This section will describe all of the C<Inline> object attributes.
+
+=head2 The code Attribute
+
+This the actual source code passed in by the user. It is stored as one long string.
+
+=head2 The language Attribute
+
+The proper name of the language being used.
+
+=head2 The language_id Attribute
+
+The language name specified by the user. Could be 'Foo++' instead of 'Foo'.
+
+=head2 The module Attribute
+
+This is the shared object's file name.
+
+=head2 The modfname Attribute
+
+This is the shared object's file name.
+
+=head2 The modpname Attribute
+
+This is the shared object's installation path extension.
+
+=head2 The version Attribute
+
+The version of C<Inline.pm> being used.
+
+=head2 The pkg Attribute
+
+The Perl package from which this invocation pf C<Inline> was called.
+
+=head2 The parser Attribute
+
+This is the place where the Parse::RecDescent parser object is normally stored.
+
+=head2 The install_lib Attribute
+
+This is the directory to write the shared object into.
+
+=head2 The build_dir Attribute
+
+This is the directory under which you should write all of your build related files.
+
+=head2 The script Attribute
+
+This is the name of the script that invoked C<Inline>.
+
+=head2 The location Attribute
+
+This is the full path name of the executable object in question.
+
+=head2 The suffix Attribute
+
+This is the shared library extension name. (Usually 'so' or 'dll').
+
+=head2 The mod_exists Attribute
+
+This is a flag indicating whether or not this module has already been compiled. (1 for true and 0 for false)
+
+=head2 The config Attribute
+
+This is where all of the non-language specific configuration options are stored.
+
+=over 4
+
+=item FORCE_BUILD
+
+Flag indicating whether or not C<Inline> should call the C<Inline::Foo::build()> method even if the code has already been compiled. (0 or 1)
+
+=item PRINT_VERSION
+
+Flag indicating whether or not C<Inline> should print a version message. (0 or 1)
+
+=item CLEAN_AFTER_BUILD
+
+Flag indicating whether or not C<Inline> should delete the contents of the build directory after a successful compilation (0 or 1)
+
+=item PRINT_INFO
+
+Flag indicating whether or not C<Inline> should print an informational report about the code being compiled. (0 or 1)
+
+=item BLIB
+
+The full path name of the base directory for building and installing C<Inline> executables. 
+
+=item REPORTBUG
+
+Flag indicating whether or not C<Inline> is in REPORTBUG mode. (0 or 1)
+
+=item CLEAN_BUILD_AREA
+
+Flag indicating whether or not C<Inline> should perform a special cleanup function on the BLIB directory. (0 or 1)
+
+=item SITE_INSTALL
+
+Flag indicating whether or not the C<Inline> code is meant to be part of a permanent module installation. (0 or 1)
+
+=item WITH
+
+A reference to an array of module names that C<Inline> should poll for configuration hints.
+
+=back
+
+=head1 The Inline Namespace
+
+C<Inline.pm> has been set up so that anyone can write their own language support modules. It further allows anyone to write a different implementation of an existing C<Inline> language, like C for instance. You can distribute that module on the CPAN. 
+
+If you have plans to implement and distribute an C<Inline> module, I would ask that you please work with the C<Inline> community. We can be reached at the C<Inline> mailing list: inline@perl.org (Send mail to inline-subscribe@perl.org to subscribe). Here you should find the advice and assistance needed to make your module a success.
+
+The C<Inline> community will decide if your implementation of COBOL will be distributed as the official C<Inline::COBOL> or should use an alternate namespace. In matters of dispute, I (Brian Ingerson) retain final authority. (and I hope not to need use of it :-) Actually modules@perl.org retains the B<final> authority.
+
+But even if you want to work alone, you are free and welcome to write and distribute C<Inline> language support modules on CPAN. You'll just need to distribute them under a different package name.
+
+=head1 SEE ALSO
+
+For generic information about C<Inline>, see L<Inline>.
+
+For information about using C<Inline> with C see L<Inline::C>.
+
+For information on supported languages and platforms see L<Inline-Support>.
+
+Inline's mailing list is inline@perl.org
+
+To subscribe, send email to inline-subscribe@perl.org
+
+=head1 AUTHOR
+
+Brian Ingerson <INGY@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2000, Brian Ingerson. All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
+
+See http://www.perl.com/perl/misc/Artistic.html
+
+=cut

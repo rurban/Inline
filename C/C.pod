@@ -1,10 +1,22 @@
 =head1 NAME
 
-B<Inline::C::Tutorial> - A Tutorial for extending Perl with C using Inline.pm
+Inline::C - Write Perl Subroutines in C
 
 =head1 DESCRIPTION
 
-This document intends to describe all of the parts of C<Inline> that are specific to the C programming language. Since C<Inline> will eventually support many programming languages, each language will have its own documentation page. For general information about C<Inline> please see the C<Inline> documentation.
+C<Inline::C> is a module that allows you to write Perl subroutines in C. Since version 0.30 the C<Inline> module supports multiple programming languages and eeach language has its own support module. This document describes how to use C<Inline> with the C programming language. It also goes a bit into Perl C internals.
+
+If you want to start working with programming examples right away, check out L<Inline::C-Cookbook>. For more information on C<Inline> in general, see L<Inline>.
+
+=head1 Usage
+
+You never actually use C<Inline::C> directly. It is just a support module for using C<Inline.pm> with C. So the usage is always:
+
+    use Inline C => ...;
+
+or
+
+    bind Inline C => ...;
 
 =head1 Function Definitions
 
@@ -31,6 +43,54 @@ The following definitions would not be recognized:
 
 Notice that C<Inline> only looks for function I<definitions>, not function I<prototypes>. Definitions are the syntax directly preceeding a function body. Also C<Inline> does not scan external files, like headers. Only the code passed to C<Inline> is used to create bindings; although other libraries can linked in, and called from C-space.
 
+=head1 C Configuration Options
+
+For information on how to specify C<Inline> configuration options, see L<Inline>. This section describes each of the configuration options available for C. Most of the options correspond either to MakeMaker or XS options of the same name. See L<ExtUtils::MakeMaker> and L<perlxs>.
+
+=head2 LIBS
+
+Specifies external libraries that should be linked into your code. Corresponds to the MakeMaker parameter.
+
+    use C => Config => LIBS => '-lyourlib';
+
+or 
+
+    use C => Config => LIBS => '-L/your/path -lyourlib';
+
+=head2 INC
+
+Specifies an include path to use. Corresponds to the MakeMaker parameter.
+
+    use C => Config => INC => '-I/inc/path';
+
+=head2 MYEXTLIB
+
+Specifies a user compiled object that should be linked in. Corresponds to the MakeMaker parameter.
+
+    use C => Config => MYEXTLIB => '/your/path/yourmodule.so';
+
+=head2 TYPEMAPS
+
+Specifies extra typemap files to use. These types will modify the behaviour of the C parsing. Corresponds to the MakeMaker parameter.
+
+    use C => Config => TYPEMAPS => '/your/path/typemap';
+
+=head2 AUTO_INCLUDE
+
+Specifies extra statements to automatically included. They will be added onto the defaults. A newline char will be automatically added.
+
+    use C => Config => AUTO_INCLUDE => '#include "yourheader.h"';
+
+=head2 BOOT
+
+Specifies C code to be executed in the XS BOOT section. Corresponds to the XS parameter.
+
+=head2 PREFIX
+
+Specifies a prefix that will be automatically stripped from C functions when they are bound to Perl. Useful for creating wrappers for shared library API-s, and binding to the original names in Perl. Also useful when names conflict with Perl internals. Corresponds to the XS parameter.
+
+    use C => Config => PREFIX => 'ZLIB_';
+
 =head1 C-Perl Bindings
 
 This section describes how the C<Perl> variables get mapped to C<C> variables and back again.
@@ -41,7 +101,7 @@ The B<Stack> is an array of scalars known internally as C<SV>'s. The B<Stack> is
 
 So back to variable mapping. XS uses a thing known as "typemaps" to turn each C<SV*> into a C<C> type and back again. This is done through various XS macro calls, casts and the Perl API. See C<perldoc perlapi>. XS allows you to define your own typemaps as well for fancier non-standard types such as C<typedef>-ed structs.
 
-C<Inline> uses a boiled down version of this approach. It parses your code for simple types and generates the XS code to map them. The currently supported types are:
+C<Inline> uses the default Perl typemap file for its default types. It parses your code for these types and generates the XS code to map them. The most commonly used types are:
 
  - int
  - long
@@ -50,7 +110,7 @@ C<Inline> uses a boiled down version of this approach. It parses your code for s
  - void
  - SV*
 
-If you need to deal with anything fancier, just use the generic C<SV*> type in the function definition. Then inside your code, do the mapping yourself.
+If you need to deal with anything fancier, just use the generic C<SV*> type in the function definition. Then inside your code, do the mapping yourself. Alternatively, you can create your own typemap files and specify them using the C<TYPEMAPS> configuration option.
 
 A return type of C<void> has a special meaning to C<Inline>. It means that you plan to push the values back onto the B<Stack> yourself. This is what you need to do to return a list of values. If you really don't want to return anything (the traditional meaning of C<void>) then simply don't push anything back.
 
@@ -169,7 +229,7 @@ In this category you have both a C<void> return type and an unfixed number of ar
 
 =head1 Examples
 
-Here is a series of examples. Each one is a complete program that you can try running yourself. In fact, each example is stored in the C<examples/> subdirectory of the C<Inline.pm> distribution. They will start out simple and build in complexity.
+Here is a few examples. Each one is a complete program that you can try running yourself. For many more examples see L<Inline::C-Cookbook>.
 
 =head2 Example #1 - Greetings
 
@@ -192,7 +252,7 @@ Notice that you do not need to C<#include <stdio.h>>. The C<perl.h> header file 
 
 This is similar to the last example except that the name is passed in as a C<SV*> (pointer to Scalar Value) rather than a string (C<char*>). That means we need to convert the C<SV> to a string ourselves. This is accomplished using the C<SvPVX> function which is part of the C<Perl> internal API. See C<perldoc perlapi> for more info.
 
-One problem is that C<SvPVX> doesn't automatically convert strings to numbers, so we get a little surprise when we try to greet C<42>.
+One problem is that C<SvPVX> doesn't automatically convert strings to numbers, so we get a little surprise when we try to greet C<42>. The program segfaults, a common occurence when delving into the guts of Perl.
 
     greet('Ingy');
     greet(42);
@@ -220,138 +280,19 @@ We can fix the problem in Example #2 by using the C<SvPV> function instead. This
     
     END_OF_C_CODE
 
-=head2 Example #4 - Return to Sender
+=head1 SEE ALSO
 
-In this example we will return the greeting to the caller, rather than printing it. This would seem mighty easy, except for the fact that we need to allocate a small buffer to create the greeting.
+For general information about C<Inline> see L<Inline>.
 
-I would urge you to stay away from C<malloc>ing your own buffer. Just use Perl's built in memory management. In other words, just create a new Perl string scalar. The function C<newSVpv> does just that. And C<newSVpvf> includes C<sprintf> functionality.
+For sample programs using C<Inline> with C see L<Inline::C-Cookbook>.
 
-The other problem is getting rid of this new scalar. How will the ref count get decremented after we pass the scalar back? Perl also provides a function called C<sv_2mortal>. Mortal variables die when the context goes out of scope. In other words, Perl will wait until the new scalar gets passed back and then decrement the ref count for you, thereby making it eligible for garbage collection. See C<perldoc perlguts>.
+For information on supported languages and platforms see L<Inline-Support>.
 
-In this example the C<sv_2mortal> call gets done under the hood by XS, because we declared the return type to be C<SV*>. Later, in Example #6, when we manage the return stack by hand, we'll need to call it ourselves. 
+For information on writing your own C<Inline> Language Support Module, see L<Inline-API>.
 
-To view the generated XS code, run the command "C<perl -MInline=INFO,FORCE,NOCLEAN example004.pl>". This will leave the build directory intact and tell you where to find it.
+Inline's mailing list is inline@perl.org
 
-If all that sounds difficult, its not. Take a look:
-
-    print greet('Ingy');
-    print greet(42);
-    
-    use Inline C => <<'END_OF_C_CODE';
-    
-    SV* greet(SV* sv_name) {
-      return (newSVpvf("Hello %s!\n", SvPV(sv_name, PL_na)));
-    }
-    
-    END_OF_C_CODE
-
-=head2 Example #5 - The Welcome Wagon
-
-Let's modify the greet function to handle a group of people, or more exactly, a list of names. We use the C<C> ellipsis syntax: "C<...>", since the list can be of any size.
-
-Since there are no types or names associated with each argument, we can't expect XS to handle the conversions for us. We'll need to pop them off the B<Stack> ourselves. Luckily there are two functions (macros) that make this a very easy task.
-
-First, we need to begin our function with a "C<Inline_Stack_Vars>" statement. This defines a few internal variables that we need to access the B<Stack>. Now we can use "C<Inline_Stack_Items>", which returns an integer containing the number of arguments passed to us from Perl.
-
-B<NOTE:> It is important to I<only> use "C<Inline_Stack_>" macros when there is an ellipsis (C<...>) in the argument list, I<or> the function has a return type of void (See Example #6).
-
-Second, we use the C<Inline_Stack_Item(x)> function to access each argument where "0 <= x < items". Observe:
-
-    greet(qw(Brian Ingerson Ingy Me Myself I));
-    
-    use Inline C => <<'END_OF_C_CODE';
-    
-    void greet(SV* name1, ...) {
-      Inline_Stack_Vars;
-      int i;
-    
-      for (i = 0; i < Inline_Stack_Items; i++) 
-        printf("Hello %s!\n", SvPV(Inline_Stack_Item(i), PL_na));
-    
-      Inline_Stack_Void;
-    }
-    
-    END_OF_C_CODE
-
-B<NOTE:> When using a variable length argument list, you have to specify at least one argument before the ellipsis. (On my compiler, anyway.) When XS does it's argument checking, it will complain if you pass in less than the number of I<defined> arguments. Therefore, there is currently no way to pass an empty list when a variable length list is expected.
-
-=head2 Example #6 - Stop Repeating Yourself
-
-In this contrived example, we'll pass in the name to greet, and the number of times to do it. The C<greet();> function will return that number of greetings. The purpose is to demonstrate how to pass back a list of values.
-
-The first thing to do is set the function return type to void. This has a special meaning to C<Inline>. It means that you're going to handle the return stack yourself.
-
-Now we call "C<Inline_Stack_Vars>", which defines an internal stack pointer. Upon entry, the pointer will not be pointing at the beginning of the Stack, so we use "C<Inline_Stack_Reset>" to reset it.
-
-The C<Inline_Stack_Push> function does a lot for us. It pushes an C<SV> onto the B<Stack>, and updates the value of the Stack pointer. It also will extend the size of the B<Stack>, if it needs to, thus avoiding segfaults. 
-
-Finally, C<Inline_Stack_Done> stashes the new value of the Stack pointer back to where it belongs. Don't forget it or your function won't work right. You'll get a return list equal in size to your input list, which in this case is 2.
-
-    print greet('Ingy', 42);
-    
-    use Inline C => <<'END_OF_C_CODE';
-    
-    void greet(char* name, int number) {
-      Inline_Stack_Vars;
-      int i;
-    
-      Inline_Stack_Reset;
-      for (i = 0; i < number; i++)
-        Inline_Stack_Push(sv_2mortal(newSVpvf("Hello %s!\n", name))); 
-    
-      Inline_Stack_Done;
-    }
-    
-    END_OF_C_CODE
-
-Also notice that we used the C<sv_2mortal> call that was discussed earlier. This will make sure that your newborn scalars get DESTROYed at the appointed time.
-
-=head2 Example #7 - The Ugly
-
-The world is not made of scalars alone, although they are definitely the easiest creatures to deal with, when doing this kind of stuff. Sometimes we need to deal with arrays, hashes, and code references, among other things.
-
-Since Perl subroutine calls only pass scalars as arguments, we'll need to use the argument type C<SV*> and pass references to more complex types.
-
-Lets look a program that dumps the key/value pairs of a hash:
-
-    use Inline C => <<'END_OF_C_CODE';
-    
-    void dump_hash(SV* hash_ref) {
-      HV* hash;
-      HE* hash_entry;
-      int num_keys, i;
-      SV* sv_key;
-      SV* sv_val;
-    
-      if (! SvROK(hash_ref))
-        croak("hash_ref is not a reference");
-    
-      hash = (HV*)SvRV(hash_ref);
-      num_keys = hv_iterinit(hash);
-      for (i = 0; i < num_keys; i++) {
-        hash_entry = hv_iternext(hash);
-        sv_key = hv_iterkeysv(hash_entry);
-        sv_val = hv_iterval(hash, hash_entry);
-        printf("%s => %s\n", SvPV(sv_key, PL_na), SvPV(sv_val, PL_na));
-      }
-      return;
-    }
-    
-    END_OF_C_CODE
-    
-    my %hash = (
-	        Author => "Brian Ingerson",
-	        Nickname => "INGY",
-	        Module => "Inline.pm",
-	        Version => "0.25",
-	        Example => 7,
-	       );
-    
-    dump_hash(\%hash);
-
-To figure out this one, just curl up with C<perldoc perlapi> for a couple hours. Actually, its fairly straight forward once you are familiar with the calls. 
-
-Note the C<croak> function call. This is the proper way to die from your C<C> extensions.
+To subscribe, send email to inline-subscribe@perl.org
 
 =head1 AUTHOR
 
@@ -361,6 +302,6 @@ Brian Ingerson <INGY@cpan.org>
 
 Copyright (c) 2000, Brian Ingerson. All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
 
-(see http://www.perl.com/perl/misc/Artistic.html)
+See http://www.perl.com/perl/misc/Artistic.html
 
 =cut

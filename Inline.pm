@@ -1,114 +1,242 @@
 package Inline;
 
-require 5.005;                # Parse::RecDescent requires this.
 use strict;
-use vars qw($VERSION @ISA);
-use AutoLoader 'AUTOLOAD';
-require DynaLoader;
-@ISA = qw(DynaLoader AutoLoader);
-$VERSION = '0.26';
+require 5.005;
+$Inline::VERSION = '0.30';
 
-use Inline::Config;
+use Inline::messages;
 use Config;
 use Carp;
 use Digest::MD5 qw(md5_hex);
+use Cwd qw(abs_path cwd);
+use FindBin;
 
-my %supported_languages = (C => 1);
+my %CONFIG = ();
+my @DATA_OBJS = ();
+my $INIT = 0;
+my $version_printed;
+
+my %shortcuts = 
+  (
+   CLEAN =>        [CLEAN_BUILD_AREA => 1],
+   FORCE =>        [FORCE_BUILD => 1],
+   INFO =>         [PRINT_INFO => 1],
+   VERSION =>      [PRINT_VERSION => 1],
+   NOCLEAN =>      [CLEAN_AFTER_BUILD => 0],
+   REPORTBUG =>    [REPORTBUG => 1],
+   SITE_INSTALL => [SITE_INSTALL => 1],
+  );
+
+my $default_config = 
+  {
+   BLIB => '',
+   WITH => [],
+   CLEAN_AFTER_BUILD => 1,
+   CLEAN_BUILD_AREA => 0,
+   FORCE_BUILD => 0,
+   PRINT_INFO => 0,
+   PRINT_VERSION => 0,
+   REPORTBUG => 0,
+   SITE_INSTALL => 0,
+  };
 
 #==============================================================================
 # This is where everything starts.
-#
-# "use Inline" will invoke the import sub automatically.
 #==============================================================================
 sub import {
-    # shield Special vars from user changes (like "perl -l")
-    local $/ = "\n";
-    local $\;
-    local $" = ' ';
-    local $,;
+    goto &deprecated_import if $INIT; 
 
-    my $o = bless {
-		   version => $Inline::VERSION,
-		  }, shift;
+    local $/ = "\n"; local $\; local $" = ' '; local $,;
 
-    @{$o}{qw(pkg script)} = caller;
-    return unless defined $_[0];     # ignore "use Inline;"
-    if ($supported_languages{$_[0]}) {
-	$o->{language} = shift;
+    my $o;
+    my ($pkg, $script) = caller;
+    my $class = shift;
+    if ($class ne 'Inline') {
+	croak usage_use($class) if $class =~ /^Inline::/;
+	croak usage;
     }
-    else {
-	$o->set_options(@_);
-	return;
+
+    $CONFIG{$pkg}{template} ||= $default_config;
+
+    return unless @_;
+    my $control = shift;
+
+    if ($control eq 'with') {
+	return handle_with($pkg, @_);
     }
-    $o->receive_code(@_);
-
-    $o->check_module;
-    $o->reportbug if $Inline::Config::REPORTBUG;
-    $o->print_info if $Inline::Config::PRINT_INFO;
-
-    if (not $o->{mod_exists} or
-	$Inline::Config::FORCE_BUILD or
-	$Inline::Config::SITE_INSTALL or
-	$Inline::Config::REPORTBUG
-       ) {
-	$o->parse_C;
-	$o->write_XS;
-	$o->write_Inline_headers;
-	$o->write_Makefile_PL;
-	$o->compile;
+    elsif ($control eq 'Config') {
+	return handle_config($pkg, @_);
     }
-    $o->dynaload;
-}
-
-#==============================================================================
-# Perform cleanup duties
-#==============================================================================
-sub DESTROY {
-    return unless ref $_[0] eq 'Inline';
-    my $o = shift;
-    $o->clean_build if $Inline::Config::CLEAN_BUILD_AREA;
-}
-
-#==============================================================================
-# Set special options from the command line
-#==============================================================================
-my %valid_options = (
-		     CLEAN =>        [CLEAN_BUILD_AREA => 1],
-		     FORCE =>        [FORCE_BUILD => 1],
-		     INFO =>         [PRINT_INFO => 1],
-		     NOCLEAN =>      [CLEAN_AFTER_BUILD => 0],
-		     REPORTBUG =>    [REPORTBUG => 1],
-		     SITE_INSTALL => [SITE_INSTALL => 1],
-		    );
-
-sub set_options {
-    my $o = shift;
-
-    for my $option (@_) {
-	my $OPTION = uc($option);
-	if ($valid_options{$OPTION}) {
-	    no strict 'refs';
-	    $ {"Inline::Config::" . $valid_options{$OPTION}->[0]} =
-	      $valid_options{$OPTION}->[1];
+    elsif ($shortcuts{uc($control)}) {
+	return handle_shortcuts($pkg, $control, @_);
+    }
+    elsif ($control =~ /^\S+$/ and $control !~ /\n/) {
+	my $language_id = $control;
+	my $option = shift
+	  or croak usage;
+	my %config = @_;
+	for (keys %config) {
+	    croak usage if /[\s\n]/;
+	}
+	$o = bless {
+		    version => $Inline::VERSION,
+		    pkg => $pkg,
+		    script => $script,
+		    language_id => $language_id,
+		   }, $class;
+	if ($option eq 'DATA') {
+	    $o->{config} = {%config};
+	    push @DATA_OBJS, $o;
+	    return;
+	}
+	elsif ($option eq 'Config') {
+	    $CONFIG{$pkg}{$language_id} = {%config};
+	    return;
 	}
 	else {
-	    croak "Invalid language or option specified. \"$option\" is not supported";
+	    $o->receive_code($option);
+	    $o->{config} = {%config};
 	}
-    }    
+    }
+    else {
+	croak usage;
+    }
+    $o->glue;
 }
 
 #==============================================================================
-# Receive the source code from the caller
+# Run time version of import (public method)
+#==============================================================================
+sub bind {
+    croak usage_bind_runtime unless $INIT; 
+
+    local $/ = "\n"; local $\; local $" = ' '; local $,;
+
+    my ($code, %config);
+    my $o;
+    my ($pkg, $script) = caller;
+    my $class = shift;
+    croak usage_bind unless $class eq 'Inline';
+
+    $CONFIG{$pkg}{template} ||= $default_config;
+
+    my $language_id = shift or croak usage_bind;
+    if ($_[-1] ne '_deprecated_import_') {
+	croak usage_bind 
+	  unless ($language_id =~ /^\S+$/ and $language_id !~ /\n/);
+	$code = shift or croak usage_bind;
+	%config = @_;
+    }
+    else {
+	pop @_;
+	$code = [@_];
+    }
+	
+    for (keys %config) {
+	croak usage_bind if /[\s\n]/;
+    }
+    $o = bless {
+		version => $Inline::VERSION,
+		pkg => $pkg,
+		script => $script,
+		language_id => $language_id,
+	       }, $class;
+    $o->receive_code($code);
+    $o->{config} = {%config};
+
+    $o->glue;
+}
+
+#==============================================================================
+# Process delayed objects that don't have source code yet.
+#==============================================================================
+# This code is an ugly hack because of the fact that you can't use an 
+# INIT block at "run-time proper". So we kill the warning for 5.6+ users
+# and tell them to use a Inline->init() call if they run into problems. (rare)
+my $lexwarn = ($] >= 5.006) ? "no warnings;\n" : '';
+
+eval <<END;
+$lexwarn
+sub INIT {
+    \$INIT++;
+    &init;
+}
+END
+
+sub init {
+    local $/ = "\n"; local $\; local $" = ' '; local $,;
+
+    for my $o (@DATA_OBJS) {
+	$o->read_DATA;
+	$o->glue;
+    }
+}
+
+#==============================================================================
+# Compile the source if needed and then dynaload the object
+#==============================================================================
+sub glue {
+    my $o = shift;
+    my ($pkg, $language_id) = @{$o}{qw(pkg language_id)};
+    my @config = (%{$CONFIG{$pkg}{template}},
+		  %{$CONFIG{$pkg}{$language_id} || {}},
+		  %{$o->{config} || {}},
+		 );
+    @config = $o->check_config(@config);
+    $o->check_config_file;
+    push @config, $o->with_configs;
+    my $language = $o->{language};
+
+    print_version() if $o->{config}{PRINT_VERSION};
+    reportbug() if $o->{config}{REPORTBUG};
+    croak "No $language_id source code found\n" unless $o->{code};
+ 	
+    $o->check_module;
+    
+    if ($o->{config}{PRINT_INFO} or
+	$o->{config}{FORCE_BUILD} or
+	$o->{config}{SITE_INSTALL} or
+	$o->{config}{REPORT_BUG} or
+	not $o->{mod_exists}) {
+	eval "require $o->{ILSM_module}";
+	croak $@ if $@;
+	bless $o, $o->{ILSM_module};    
+	$o->validate(@config);
+    }
+    else {
+	$o->{config} = {(%{$o->{config}}, @config)};
+    }
+    $o->print_info if $o->{config}{PRINT_INFO};
+    if (not $o->{mod_exists} or
+	$o->{config}{FORCE_BUILD} or
+	$o->{config}{SITE_INSTALL} or
+	$o->{config}{REPORTBUG}
+       ) {
+	$o->build;
+    }
+    if ($o->{ILSM_suffix} ne 'so' and
+	$o->{ILSM_suffix} ne 'dll' and
+	ref($o) eq 'Inline'
+       ) {
+	eval "require $o->{ILSM_module}";
+	croak $@ if $@;
+	bless $o, $o->{ILSM_module};    
+    }
+
+    $o->load;
+}
+
+#==============================================================================
+# Get the source code
 #==============================================================================
 sub receive_code {
     my $o = shift;
-    my ($code) = join '', @_;
+    my $code = shift;
     
-    croak "No code supplied to Inline"
-      unless (defined $code and $code);
+    croak usage unless (defined $code and $code);
 
-    if (ref $_[0] eq 'CODE') {
-	$o->{code} = &{$_[0]};
+    if (ref $code eq 'CODE') {
+	$o->{code} = &$code;
     }
     elsif ($code =~ m|[/\\]| and
 	   $code =~ m|^[\w/.-]+$|) {
@@ -122,16 +250,211 @@ sub receive_code {
 	    croak "Inline assumes \"$code\" is a filename, and that file does not exist\n";
 	}
     } 
+    elsif (ref $code eq 'ARRAY') {
+	$o->{code} = join '', @$code;
+    }
     else {
 	$o->{code} = $code;
     }
 }
 
 #==============================================================================
+# Get source from the DATA filehandle
+#==============================================================================
+my %DATA;
+sub read_DATA {
+    my $o = shift;
+    my ($pkg, $language_id) = @{$o}{qw(pkg language_id)};
+    {
+	no strict 'refs';
+	*Inline::DATA = *{$pkg . '::DATA'};
+    }
+    $DATA{$pkg} ||= '';
+    unless ($DATA{$pkg} eq $language_id) {
+	while (<Inline::DATA>) {
+	    last if /^__($language_id)__$/;
+	}
+    }
+    while (<Inline::DATA>) {
+	last if /^\=\w+/;
+	if (/^__(\S+)__$/) {
+	    $DATA{$pkg} = $1;
+	    last;
+	}
+	$o->{code} .= $_;
+    }
+}
+
+#==============================================================================
+# Validate and store the non language-specific config options
+#==============================================================================
+sub check_config {
+    my $o = shift;
+    my @others;
+    while (@_) {
+	my ($key, $value) = (shift, shift);
+	if (defined $ {$default_config}{$key}) {
+	    if ($key eq 'BLIB') {
+		if ($value) {
+		    croak usage_BLIB($value)
+		      unless (-d $value);
+		    $value = abs_path($value) . '/';
+		}
+	    }
+	    elsif ($key eq 'WITH') {
+		croak usage_WITH
+		  if (ref $value and
+		      ref $value ne 'ARRAY');
+		$value = [$value] unless ref $value;
+	    }
+	    $o->{config}{$key} = $value;
+	}
+	else {
+	    push @others, $key, $value;
+	}
+    }
+    $o->{config}{BLIB} ||= $o->find_temp_dir;
+    return (@others);
+}
+
+#==============================================================================
+# Read the cached config file from the BLIB directory. This will indicate
+# whether the Language code is valid or not.
+#==============================================================================
+sub check_config_file {
+    my ($BLIB);
+    my $o = shift;
+    
+    croak usage_Config if exists $main::{Config::};
+
+    # First make sure we have the BLIB
+    if ($o->{config}{SITE_INSTALL}) {
+	my $cwd = Cwd::cwd();
+	$BLIB = $o->{config}{BLIB} = "$cwd/blib_I/";
+	if (not -d $BLIB) {
+	    mkdir($BLIB, 0777)
+	      or croak "Can't mkdir $BLIB to build Inline code.\n";
+	}
+    }
+    else {
+	$BLIB = $o->{config}{BLIB} ||= $o->find_temp_dir;
+    }
+
+    $o->create_config_file("$BLIB/config") if not -e "$BLIB/config";
+
+    open CONFIG, "< $BLIB/config"
+      or croak "Can't open ${BLIB}config for input\n";
+    my $config = join '', <CONFIG>;
+    close CONFIG;
+
+    delete $main::{Inline::config::};
+    eval <<END;
+;package Inline::config;
+no strict;
+$config
+END
+
+    croak "Unable to parse ${BLIB}config\n$@\n" if $@;
+    croak usage_language($o->{language_id})
+      unless defined $Inline::config::languages{$o->{language_id}};
+    $o->{language} = $Inline::config::languages{$o->{language_id}};
+
+    if ($o->{language} ne $o->{language_id}) {
+	if (defined $o->{$o->{language_id}}) {
+	    $o->{$o->{language}} = $o->{$o->{language_id}};
+	    delete $o->{$o->{language_id}};
+	}
+    }
+
+    $o->{ILSM_type} = $Inline::config::types{$o->{language}};
+    $o->{ILSM_module} = $Inline::config::modules{$o->{language}};
+    $o->{ILSM_suffix} = $Inline::config::suffixes{$o->{language}};
+
+#    print Dumper $o;
+}
+
+#==============================================================================
+# Auto-detect installed Inline language support modules
+#==============================================================================
+sub create_config_file {
+    my ($o, $file) = @_;
+    my ($lib, $mod, $register, %checked,
+	%languages, %types, %modules, %suffixes);
+
+  LIB:
+    for my $lib (@INC) {
+	next unless -d "$lib/Inline";
+	opendir LIB, "$lib/Inline" 
+	  or croak "Can't open directory $lib/Inline";
+	while ($mod = readdir(LIB)) {
+	    next unless $mod =~ /\.pm$/;
+	    $mod =~ s/\.pm$//;
+	    next LIB if ($checked{$mod}++);
+	    next if $mod eq 'messages'; # Skip Inline::messages
+	    if ($mod eq 'Config') {     # Skip Inline::Config
+		warn usage_Config if $^W;
+		next;
+	    }
+	    eval "require Inline::$mod;\$register=&Inline::${mod}::register";
+	    croak usage_register($mod, $@) if $@;
+	    my $language = $register->{language} 
+	    or croak usage_register($mod);
+	    for (@{$register->{aliases}}) {
+		croak usage_alias_used($mod, $_, $languages{$_})
+		  if defined $languages{$_};
+		$languages{$_} = $language;
+	    }
+	    $languages{$language} = $language;
+	    $types{$language} = $register->{type};
+	    croak usage_register($mod, "Bad language type")
+	      unless ($types{$language} eq 'compiled' or
+		      $types{$language} eq 'interpreted');
+	    $modules{$language} = "Inline::$mod";
+	    $suffixes{$language} = $register->{suffix};
+	}
+	closedir LIB;
+    }
+    
+    require Data::Dumper;
+    local $Data::Dumper::Terse = 1;
+    local $Data::Dumper::Indent = 1;
+    my $languages = Data::Dumper::Dumper(\%languages);
+    my $types = Data::Dumper::Dumper(\%types);
+    my $modules = Data::Dumper::Dumper(\%modules);
+    my $suffixes = Data::Dumper::Dumper(\%suffixes);
+    
+    open CONFIG, "> $file" or croak "Can't open $file for output\n";
+    print CONFIG <<END;
+%languages = %{$languages};
+%types = %{$types};
+%modules = %{$modules};
+%suffixes = %{$suffixes};
+END
+    close CONFIG;
+}
+
+#==============================================================================
+# Get config hints
+#==============================================================================
+sub with_configs {
+    my $o = shift;
+    my @configs;
+    for my $mod (@{$o->{config}{WITH}}) {
+	my $ref = eval {
+	    no strict 'refs';
+	    &{$mod . "::Inline"}($o->{language});
+	};
+	croak "Module $mod does not work with Inline\n$@\n" if $@;
+	push @configs, %$ref;
+    }
+    return @configs;
+}
+
+#==============================================================================
 # Check to see if code has already been compiled
 #==============================================================================
 sub check_module {
-    my ($pkg, $id);
+    my ($pkg, $id, $BLIB);
     my $o = shift;
 
     $pkg = $o->{pkg};
@@ -148,7 +471,7 @@ sub check_module {
 	$id = '' unless $id =~ m|^\d\.\d\d$|;
 	$id =~ s|\.|_|;
 	croak "Inline.pm Error. \$VERSION is missing or invalid for module $pkg\n"
-	  if ($Inline::Config::SITE_INSTALL and not $id);
+	  if ($o->{config}{SITE_INSTALL} and not $id);
 	$id .= '_' if $id;
     }
 
@@ -157,47 +480,42 @@ sub check_module {
     my @modparts = split(/::/,$o->{module});
     $o->{modfname} = $modparts[-1];
     $o->{modpname} = join('/',@modparts);
-    $o->{so} = $Config::Config{so};
+    $o->{suffix} = $o->{ILSM_suffix};
     $o->{mod_exists} = 0;
 
-    if ($Inline::Config::SITE_INSTALL) {
-	my $cwd = Cwd::cwd();
-	my $blib = "$cwd/blib";
-	my $blib_I = "$cwd/blib_I/";
+    $BLIB = $o->{config}{BLIB};
+
+    if ($o->{config}{SITE_INSTALL}) {
+	my $blib = Cwd::cwd() . "/blib";
 	croak "Invalid attempt to do SITE_INSTALL\n"
 	  unless (-d $blib and -w $blib);
-	if (not -d $blib_I) {
-	    mkdir($blib_I, 0777)
-	      or croak "Can't mkdir $blib_I to build Inline code.\n";
-	}
-	$o->{build_dir} = $blib_I;
+	$o->{build_dir} = $BLIB;
 	$o->{install_lib} = "$blib/arch/";
 	$o->{location} = 
-	  "$blib/arch/auto/$o->{modpname}/$o->{modfname}.$o->{so}";
+	  "$blib/arch/auto/$o->{modpname}/$o->{modfname}.$o->{suffix}";
 	return;
     }
 
     $o->{location} =
-      "$Config::Config{installsitearch}/auto/$o->{modpname}/$o->{modfname}.$o->{so}";
+      "$Config::Config{installsitearch}/auto/" .
+	"$o->{modpname}/$o->{modfname}.$o->{suffix}";
     if (-f $o->{location}) {
 	$o->{mod_exists} = 1;
-	if ($Inline::Config::FORCE_BUILD or
-	    $Inline::Config::REPORTBUG) {
-	    $o->{build_dir} = 
-	      Inline::Config::_get_build_prefix() . $o->{modpname} . '/';
-	    $o->{install_lib} = Inline::Config::_get_install_lib();
+	if ($o->{config}{FORCE_BUILD} or
+	    $o->{config}{REPORTBUG}) {
+	    $o->{build_dir} = $BLIB . $o->{modpname} . '/';
+	    $o->{install_lib} = $BLIB . 'lib/perl5' . $o->get_install_suffix;
 	    unshift @::INC, $o->{install_lib};
 	    $o->{location} =
-	      "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{so}"; 
+	      "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{suffix}"; 
 	}
     }
     else {
-	$o->{build_dir} = 
-	  Inline::Config::_get_build_prefix() . $o->{modpname} . '/';
-	$o->{install_lib} = Inline::Config::_get_install_lib();
+	$o->{build_dir} = $BLIB . $o->{modpname} . '/';
+	$o->{install_lib} = $BLIB . 'lib/perl5' . $o->get_install_suffix;
 	unshift @::INC, $o->{install_lib};
 	$o->{location} = 
-	  "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{so}"; 
+	  "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{suffix}"; 
 
 	if (-f $o->{location}) {
 	    $o->{mod_exists} = 1;
@@ -208,9 +526,14 @@ sub check_module {
 #==============================================================================
 # Dynamically load the object module
 #==============================================================================
-sub dynaload {
+sub load {
     my $o = shift;
     my ($pkg, $module) = @{$o}{qw(pkg module)};
+
+    croak usage_loader unless $o->{ILSM_type} eq 'compiled';
+
+    require DynaLoader;
+    @Inline::ISA = qw(DynaLoader);
 
     eval <<END;
 	package $pkg;
@@ -218,26 +541,133 @@ sub dynaload {
 
 	package $module;
 	push \@$ {module}::ISA, qw(Exporter DynaLoader);
-	bootstrap $module 
-          or croak("Had problems bootstrapping $module");
+	bootstrap $module;
 END
+    croak("Had problems bootstrapping Inline module $module\n$@\n") if $@;
 }
 
-1;
+#==============================================================================
+# Handle old syntax
+#==============================================================================
+sub deprecated_import {
+    local $/ = "\n"; local $\; local $" = ' '; local $,;
+    
+    my ($class, $language, @lines) = @_;
+    croak usage_import unless ($class eq 'Inline' and
+			       $language eq 'C' and
+			       @lines);
+    for (@lines) {
+	croak usage_import unless /\n/;
+    }
 
-__END__
+    warn usage_deprecated_import if $^W;
+    push @_, '_deprecated_import_';
+    goto &bind;
+}
 
 #==============================================================================
-# The following subroutines use AutoLoader
-# This keeps the runtime overhead down if no compilation is needed.
+# Process the with command
 #==============================================================================
+sub handle_with {
+    my $pkg = shift;
+    croak usage_with unless @_;
+    for (@_) {
+	croak usage unless /^[\w:]+$/;
+	eval "require $_;";
+	croak usage_with_bad($_) . $@ if $@;
+	push @{$CONFIG{$pkg}{template}{WITH}}, $_;
+    }
+}
+
+#==============================================================================
+# Process the config options
+#==============================================================================
+sub handle_config {
+    my $pkg = shift;
+    while (@_) {
+	my ($key, $value) = (shift, shift);
+	croak usage if $key =~ /[\s\n]/;
+	croak "Invalid Config option '$key'\n"
+	  unless defined ${$default_config}{$key};
+	$CONFIG{$pkg}{template}{$key} = $value;
+    }
+}
+
+#==============================================================================
+# Validate and store shortcut config options
+#==============================================================================
+sub handle_shortcuts {
+    my $pkg = shift;
+
+    for my $option (@_) {
+	my $OPTION = uc($option);
+	if ($shortcuts{$OPTION}) {
+	    my ($method, $arg) = @{$shortcuts{$OPTION}};
+	    $CONFIG{$pkg}{template}{$method} = $arg;
+	}
+	else {
+	    croak usage_shortcuts($option);
+	}
+    }    
+}
+
+#==============================================================================
+# Perform cleanup duties
+#==============================================================================
+sub DESTROY {
+    my $o = shift;
+    $o->clean_build if $o->{config}{CLEAN_BUILD_AREA};
+}
+
+#==============================================================================
+# Clean the build directory from previous builds
+#==============================================================================
+sub clean_build {
+    use strict;
+    my ($prefix, $dir);
+    my $o = shift;
+
+    $prefix = $o->{config}{BLIB};
+    opendir(BUILD, $prefix)
+      or die "Can't open build directory: $prefix for cleanup $!\n";
+
+    while ($dir = readdir(BUILD)) {
+	if ((-d "$prefix$dir") and ($dir =~ /\w{36,}/)) {
+	    $o->rmpath($prefix, $dir); 
+	}
+    }
+
+    close BUILD;
+}
+
+#==============================================================================
+# 
+#==============================================================================
+sub error_copy {
+    require File::Copy;
+    require File::Path;
+    my ($src_file, $new_file);
+    my $o = shift;
+    delete @{$o->{parser}}{grep {!/^data$/} keys %{$o->{parser}}};
+    my $src_dir = $o->{build_dir};
+    my $new_dir = $o->{config}{BLIB} . "errors";
+
+    File::Path::rmtree($new_dir);
+    File::Path::mkpath($new_dir);
+    opendir DIR, $src_dir;
+    while ($src_file = readdir(DIR)) {
+	next unless -f "$src_dir/$src_file";
+	($new_file = $src_file) =~ s/_?[0-9abcdef]{32}//g;
+	File::Copy::copy("$src_dir/$src_file", "$new_dir/$new_file");
+    }
+}
 
 #==============================================================================
 # User wants to report a bug
 #==============================================================================
 sub reportbug {
     use strict;
-    use Data::Dumper;
+    require Data::Dumper;
     my $o = shift;
     return if $o->{reportbug_handled}++;
     print STDERR <<END;
@@ -245,7 +675,7 @@ sub reportbug {
 
 REPORTBUG mode in effect.
 
-Your Inline $o->{language} code will be processed in the build directory:
+Your Inline $o->{language_id} code will be processed in the build directory:
 
 $o->{build_dir}
 
@@ -298,6 +728,17 @@ END
 }
 
 #==============================================================================
+# Print a small report about the version of Inline
+#==============================================================================
+sub print_version {
+    return if $version_printed++;
+    print STDERR <<END;
+You are using Inline.pm version $Inline::VERSION
+
+END
+}
+
+#==============================================================================
 # Print a small report if PRINT_INFO option is set.
 #==============================================================================
 sub print_info {
@@ -307,7 +748,7 @@ sub print_info {
     print STDERR <<END;
 <-----------------------Information Section----------------------------------->
 
-Information about the processing of your Inline $o->{language} code:
+Information about the processing of your Inline $o->{language_id} code:
 
 END
     
@@ -317,7 +758,7 @@ $o->{location}
 
 END
 
-    print STDERR <<END if ($o->{mod_exists} and $Inline::Config::FORCE_BUILD);
+    print STDERR <<END if ($o->{mod_exists} and $o->{config}{FORCE_BUILD});
 But the FORCE_BUILD option is set, so your code will be recompiled.
 I\'ll use this build directory:
 $o->{build_dir}
@@ -334,24 +775,11 @@ and I\'ll install the executable as:
 $o->{location}
 
 END
-
-    $o->parse_C unless $o->{parser};
-    if (@{$o->{parser}->{data}->{functions}}) {
-	print STDERR "The following Inline $o->{language} function(s) have been successfully bound to Perl:\n";
-	my $parser = $o->{parser};
-	my $data = $parser->{data};
-	for my $function (sort @{$data->{functions}}) {
-	    my $return_type = $data->{function}->{$function}->{return_type};
-	    my @arg_names = @{$data->{function}->{$function}->{arg_names}};
-	    my @arg_types = @{$data->{function}->{$function}->{arg_types}};
-	    my @args = map {$_ . ' ' . shift @arg_names} @arg_types;
-	    print STDERR ("\t$return_type $function(", 
-			  join(', ', @args), ")\n");
-	}
-    }
-    else {
-	print STDERR "No $o->{language} functions have been successfully bound to Perl.\n\n";
-    }
+    
+    eval {
+	print STDERR $o->info;
+    };
+    print $@ if $@;
 
     print STDERR <<END;
 
@@ -360,341 +788,12 @@ END
 }
 
 #==============================================================================
-# Parse the function definition information out of the C code
-#==============================================================================
-my $C_grammar = <<'END_OF_GRAMMAR';
-
-c_code:	part(s) {1}
-
-part:	  comment
-	| function_definition
-	{
-	 my $function = $item[1]->[0];
-	 push @{$thisparser->{data}->{functions}}, $function;
-	 $thisparser->{data}->{function}->{$function}->{return_type} = 
-             $item[1]->[1];
-	 $thisparser->{data}->{function}->{$function}->{arg_types} = 
-             [map {ref $_ ? $_->[0] : '...'} @{$item[1]->[2]}];
-	 $thisparser->{data}->{function}->{$function}->{arg_names} = 
-             [map {ref $_ ? $_->[1] : '...'} @{$item[1]->[2]}];
-	}
-	| anything_else
-
-comment:  m{\s* // [^\n]* \n }x
-	| m{\s* /\* (?:[^*]+|\*(?!/))* \*/  ([ \t]*)? }x
-
-function_definition:
-	type IDENTIFIER '(' <leftop: arg ',' arg>(s?) ')' '{'
-	{[@item[2,1], $item[4]]}
-
-type:	('SV' | 'int' | 'long' | 'double' | 'char' | 'void') star(s?)
-	{
-         $return = join '',$item[1],@{$item[2]};
-         $return = '' unless ($Inline::valid_types{$return});
-	}
-
-star: '*'
-
-arg:	  type IDENTIFIER {[@item[1,2]]}
-	| '...'
-
-IDENTIFIER: /[a-z]\w*/i
-
-anything_else: /.*/
-
-END_OF_GRAMMAR
-
-sub parse_C {
-    use strict;
-    use Data::Dumper;
-    use Parse::RecDescent;
-
-    my $o = shift;
-    return if $o->{parser};
-
-    %Inline::valid_types = map {($_, 1)}
-    qw(SV* int long double char* void);
-
-    $::RD_HINT++;
-    my $parser = $o->{parser} = Parse::RecDescent->new($C_grammar);
-
-    $parser->c_code($o->{code})
-      or croak "Bad C code passed to Inline at @{[caller(2)]}\n";
-#    print STDERR Data::Dumper::Dumper $parser->{data};
-}
-
-#==============================================================================
-# Generate the XS glue code
-#==============================================================================
-sub write_XS {
-    use strict;
-    my $o = shift;
-    my ($pkg, $module, $modfname) = @{$o}{qw(pkg module modfname)};
-    $o->{auto_include} = $Inline::Config::AUTO_INCLUDE_C;
-
-    $o->mkpath($o->{build_dir});
-    open XS, "> $o->{build_dir}/$modfname.xs"
-      or croak $!;
-    print XS <<END;
-$o->{auto_include}
-$o->{code}
-
-MODULE = $module     	PACKAGE = $pkg
-
-PROTOTYPES: DISABLE
-END
-    my $parser = $o->{parser};
-    my $data = $parser->{data};
-    
-    for my $function (@{$data->{functions}}) {
-	my $return_type = $data->{function}->{$function}->{return_type};
-	my @arg_names = @{$data->{function}->{$function}->{arg_names}};
-	my @arg_types = @{$data->{function}->{$function}->{arg_types}};
-
-	print XS ("\n$return_type\n$function (", 
-		  join(', ', @arg_names), ")\n");
-
-	for my $arg_name (@arg_names) {
-	    my $arg_type = shift @arg_types;
-	    last if $arg_type eq '...';
-	    print XS "\t$arg_type\t$arg_name\n";
-	}
-
-	my $listargs = '';
-	$listargs = pop @arg_names if (@arg_names and 
-				       $arg_names[-1] eq '...');
-	my $arg_name_list = join(', ', @arg_names);
-
-	if ($return_type eq 'void') {
-	    print XS <<END;
-	PREINIT:
-	I32* temp;
-	PPCODE:
-	temp = PL_markstack_ptr++;
-	$function($arg_name_list);
-	if (PL_markstack_ptr != temp) {
-          /* truly void, because dXSARGS not invoked */
-	  PL_markstack_ptr = temp;
-	  XSRETURN_EMPTY; /* return empty stack */
-        }
-        /* must have used dXSARGS; list context implied */
-	return; /* assume stack size is correct */
-END
-	}
-	elsif ($listargs) {
-	    print XS <<END;
-	PREINIT:
-	I32* temp;
-	CODE:
-	temp = PL_markstack_ptr++;
-	RETVAL = $function($arg_name_list);
-	PL_markstack_ptr = temp;
-	OUTPUT:
-        RETVAL
-END
-	}
-    }
-    print XS "\n";
-    close XS;
-}
-
-#==============================================================================
-# Generate the INLINE.h file.
-#==============================================================================
-sub write_Inline_headers {
-    use strict;
-    my $o = shift;
-
-    open HEADER, "> $o->{build_dir}/INLINE.h"
-      or croak;
-
-    print HEADER <<'END';
-#define Inline_Stack_Vars	dXSARGS
-#define Inline_Stack_Items      items
-#define Inline_Stack_Item(x)	ST(x)
-#define Inline_Stack_Reset      sp = mark
-#define Inline_Stack_Push(x)	XPUSHs(x)
-#define Inline_Stack_Done	PUTBACK
-#define Inline_Stack_Return(x)	XSRETURN(x)
-#define Inline_Stack_Void       XSRETURN(0)
-
-#define INLINE_STACK_VARS	Inline_Stack_Vars
-#define INLINE_STACK_ITEMS	Inline_Stack_Items
-#define INLINE_STACK_ITEM(x)	Inline_Stack_Item(x)
-#define INLINE_STACK_RESET	Inline_Stack_Reset
-#define INLINE_STACK_PUSH(x)    Inline_Stack_Push(x)
-#define INLINE_STACK_DONE	Inline_Stack_Done
-#define INLINE_STACK_RETURN(x)	Inline_Stack_Return(x)
-#define INLINE_STACK_VOID	Inline_Stack_Void
-
-#define inline_stack_vars	Inline_Stack_Vars
-#define inline_stack_items	Inline_Stack_Items
-#define inline_stack_item(x)	Inline_Stack_Item(x)
-#define inline_stack_reset	Inline_Stack_Reset
-#define inline_stack_push(x)    Inline_Stack_Push(x)
-#define inline_stack_done	Inline_Stack_Done
-#define inline_stack_return(x)	Inline_Stack_Return(x)
-#define inline_stack_void	Inline_Stack_Void
-END
-
-    close HEADER;
-}
-
-#==============================================================================
-# Generate the Makefile.PL
-#==============================================================================
-sub write_Makefile_PL {
-    use strict;
-    use Data::Dumper;
-
-    my $o = shift;
-    my %options = (
-		   VERSION => '0.00',
-		   %Inline::Config::MAKEFILE,
-		   NAME => $o->{module},
-		  );
-    
-    open MF, "> $o->{build_dir}/Makefile.PL"
-      or croak;
-    
-    print MF <<END;
-use ExtUtils::MakeMaker;
-my %options = %\{       
-END
-
-    local $Data::Dumper::Terse = 1;
-    local $Data::Dumper::Indent = 1;
-    print MF Data::Dumper::Dumper(\ %options);
-
-    print MF <<END;
-\};
-WriteMakefile(\%options);
-END
-    close MF;
-}
-
-#==============================================================================
-# Run the build process.
-#==============================================================================
-sub compile {
-    use strict;
-    use Cwd;
-    my ($o, $perl, $make, $cmd, $cwd);
-    $o = shift;
-    my ($module, $modpname, $modfname, $build_dir, $install_lib) = 
-      @{$o}{qw(module modpname modfname build_dir install_lib)};
-
-    -f ($perl = $Config::Config{perlpath})
-      or croak "Can't locate your perl binary";
-    ($make = $Config::Config{make})
-      or croak "Can't locate your make binary";
-    $cwd = &cwd;
-    for $cmd ("$perl Makefile.PL > out.Makefile_PL 2>&1",
-	      \ &fix_make,   # Fix Makefile problems
-	      "$make > out.make 2>&1",
-	      "$make install > out.make_install 2>&1",
-	     ) {
-	if (ref $cmd) {
-	    $o->$cmd();
-	}
-	else {
-	    chdir $build_dir;
-	    system($cmd) and croak <<END;
-
-A problem was encountered while attempting to compile and install your Inline
-$o->{language} code. The command that failed was:
-  $cmd
-
-The build directory was:
-$build_dir
-
-To debug the problem, cd to the build directory, and inspect the output files.
-
-END
-	    chdir $cwd;
-	}
-    }
-
-    if ($Inline::Config::CLEAN_AFTER_BUILD and 
-	not $Inline::Config::REPORTBUG
-       ) {
-	$o->rmpath(Inline::Config::_get_build_prefix(), $modpname);
-	unlink "$install_lib/auto/$modpname/.packlist";
-	unlink "$install_lib/auto/$modpname/$modfname.bs";
-	unlink "$install_lib/auto/$modpname/$modfname.exp"; #MSWin32 VC++
-	unlink "$install_lib/auto/$modpname/$modfname.lib"; #MSWin32 VC++
-    }
-}
-
-#==============================================================================
-# This routine fixes problems with the MakeMaker Makefile.
-# Yes, it is a kludge, but it is a necessary one.
-# 
-# ExtUtils::MakeMaker cannot be trusted. It has extremely flaky behaviour
-# between releases and platforms. I have been burned several times.
-#
-# Doing this actually cleans up other code that was trying to guess what
-# MM would do. This method will always work.
-# And, at least this only needs to happen at build time, when we are taking 
-# a performance hit anyway!
-#==============================================================================
-my %fixes = (
-	     INSTALLSITEARCH => 'install_lib',
-	     INSTALLDIRS => 'installdirs',
-	    );
-
-sub fix_make {
-    use strict;
-    my (@lines, $fix);
-    my $o = shift;
-
-    $o->{installdirs} = 'site';
-    
-    open(MAKEFILE, "< $o->{build_dir}Makefile")
-      or croak "Can't open Makefile for input: $!\n";
-    @lines = <MAKEFILE>;
-    close MAKEFILE;
-
-    open(MAKEFILE, "> $o->{build_dir}Makefile")
-      or croak "Can't open Makefile for output: $!\n";
-    for (@lines) {
-	if (/^(\w+)\s*=\s*\S*\s*$/ and
-	    $fix = $fixes{$1}
-	   ) {
-	    print MAKEFILE "$1 = $o->{$fix}\n"
-	}
-	else {
-	    print MAKEFILE;
-	}
-    }
-    close MAKEFILE;
-}
-
-#==============================================================================
-# Clean the build directory from previous builds
-#==============================================================================
-sub clean_build {
-    use strict;
-    my ($prefix, $dir);
-    my $o = shift;
-
-    $prefix = Inline::Config::_get_build_prefix();
-    opendir(BUILD, $prefix)
-      or die "Can't open build directory: $prefix for cleanup $!\n";
-
-    while ($dir = readdir(BUILD)) {
-	if ((-d "$prefix$dir") and ($dir =~ /\w{36,}/)) {
-	    $o->rmpath($prefix, $dir); 
-	}
-    }
-
-    close BUILD;
-}
-
-#==============================================================================
 # Utility subroutines
 #==============================================================================
 
+#==============================================================================
+# Make a path
+#==============================================================================
 sub mkpath {
     use strict;
     my ($o, $mkpath) = @_;
@@ -710,6 +809,9 @@ sub mkpath {
       unless -d $mkpath;
 }
 
+#==============================================================================
+# Nuke a path (nicely)
+#==============================================================================
 sub rmpath {
     use strict;
     use File::Path();
@@ -726,3 +828,82 @@ sub rmpath {
 	pop @parts;
     }
 }
+
+#==============================================================================
+# Find the latter part of the install path.
+#==============================================================================
+my $INSTALL_SUFFIX;
+sub get_install_suffix {
+    return $INSTALL_SUFFIX if $INSTALL_SUFFIX;
+    # MSWin32 needs abs_path
+    my $suffix = abs_path($Config::Config{sitearch});
+    $suffix =~ s|^.*(/site.*)$|$1| 
+      or croak <<'END';
+Can\'t parse your perl configuration to find an appropriate install suffix.
+Try setting INSTALL_SUFFIX yourself.
+END
+    return $INSTALL_SUFFIX = $suffix;
+}
+
+#==============================================================================
+# Find the temporary or 'BLIB' directory.
+#==============================================================================
+my $TEMP_DIR;
+sub find_temp_dir {
+    return $TEMP_DIR if $TEMP_DIR;
+    
+    my ($temp_dir, $home, $bin, $cwd, $env);
+    $temp_dir = '';
+    $env = $ENV{PERL_INLINE_BLIB} || '';
+    $home = $ENV{HOME} ? abs_path($ENV{HOME}) : '';
+    
+    if ($env and
+	-d $env and
+	-w $env) {
+	$temp_dir = $env;
+    }
+    elsif ($cwd = abs_path('.') and
+	   $cwd ne $home and
+	   -d "$cwd/blib_I/" and
+	   -w "$cwd/blib_I/") {
+	$temp_dir = "$cwd/blib_I/";
+    }
+    elsif ($bin = $FindBin::Bin and
+	   -d "$bin/blib_I/" and
+	   -w "$bin/blib_I/") {
+	$temp_dir = "$bin/blib_I/";
+    } 
+    elsif (-d "/tmp/blib_I/" and
+	   -w "/tmp/blib_I/") {
+	$temp_dir = "/tmp/blib_I/";
+    } 
+    elsif ($home and
+	   -d "$home/blib_I/" and
+	   -w "$home/blib_I/") {
+	$temp_dir = "$home/blib_I/";
+    } 
+    elsif ($home and
+	   -d "$home/.blib_I/" and
+	   -w "$home/.blib_I/") {
+	$temp_dir = "$home/.blib_I/";
+    }
+    elsif (defined $bin and
+	   -d $bin and
+	   -w $bin and
+	   mkdir("$bin/blib_I/", 0777)) {
+	$temp_dir = "$bin/blib_I/";
+    }
+    elsif (-d $cwd and
+	   -w $cwd and
+	   mkdir("$cwd/blib_I/", 0777)) {
+	$temp_dir = "$cwd/blib_I/";
+    }
+
+    croak "Couldn't find an appropriate temporary directory to build in\n"
+      unless $temp_dir;
+    return $TEMP_DIR = abs_path($temp_dir) . '/';
+}
+
+1;
+
+__END__
