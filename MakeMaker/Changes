@@ -1,0 +1,10 @@
+Revision history for Perl extension Inline::MakeMaker.
+
+0.40  Sun May 13 23:30:02 PDT 2001
+	- First version of Inline::MakeMaker.
+          Supports installing Inline extensions like regular XS ones.
+
+0.01  Mon May  7 22:30:09 2001
+	- original version; created by h2xs 1.21 with options
+		-PAXn Inline::MakeMaker
+

@@ -25,7 +25,9 @@ Projects that I would most like to see happen in the year 2001 are:
  - Fortran
  - Ruby
  - Lisp
+ - Guile
  - Bash
+ - Perl4
 
 =head1 SUPPORTED PLATFORMS
 
@@ -53,6 +55,8 @@ Inline has been successfully tested at one time or another on the following plat
     OS X
     WinNT
     Win2K
+    WinME
+    Win98
     Cygwin
 
 The Microsoft tests deserve a little more explanation. I used the following:
@@ -70,6 +74,8 @@ To install C<Inline.pm> (or any other CPAN module) on MSWin32 w/ Visual C++, use
     nmake
     nmake test
     nmake install
+
+Inline has also been made to work with Mingw32/gcc on all Windows platforms. This is a free compiler for Windows. You must also use a perl built with that compiler.
 
 The "Cygwin" test was done on a Windows 98 machine using the Cygwin Unix/Win32 porting layer software from Cygnus. The C<perl> binary on this machine was also compiled using the Cygwin tool set (C<gcc>). This software is freely available from http://sources.redhat.com/cygwin/
 

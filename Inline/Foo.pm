@@ -45,33 +45,34 @@ sub validate {
 
 sub build {
     my $o = shift;
-    my $code = $o->{code};
+    my $code = $o->{API}{code};
     my $pattern = $o->{ILSM}{PATTERN};
     $code =~ s/$pattern//g;
     $code =~ s/bar-//g if $o->{ILSM}{BAR};
-    sleep 1 if $o->{config}{FORCE_BUILD};
+    sleep 1; # imitate compile delay
     {
 	package Foo::Tester;
 	eval $code;
     }
     croak "Foo build failed:\n$@" if $@;
-    my $dir = $o->{location};
-    $dir =~ s/(.*[\\\/]).*/$1/;
-    $o->mkpath($dir) unless -d $dir;
-    open FOO, "> $o->{location}"
-      or croak "Can't open $o->{location} for output\n$!";
-    print FOO $code;
-    close FOO;
+    my $path = "$o->{API}{install_lib}/auto/$o->{API}{modpname}";
+    my $obj = $o->{API}{location};
+    $o->mkpath($path) unless -d $path;
+    open FOO_OBJ, "> $obj"
+      or croak "Can't open $obj for output\n$!";
+    print FOO_OBJ $code;
+    close \*FOO_OBJ;
 }
 
 sub load {
     my $o = shift;
-    open FOO, "< $o->{location}"
-      or croak "Can't open $o->{location} for output\n$!";
-    my $code = join '', <FOO>;
-    close FOO;
-    eval "package $o->{pkg};\n$code";
-    croak "Unable to load Foo module $0->{location}:\n$@" if $@;
+    my $obj = $o->{API}{location};
+    open FOO_OBJ, "< $obj"
+      or croak "Can't open $obj for output\n$!";
+    my $code = join '', <FOO_OBJ>;
+    close \*FOO_OBJ;
+    eval "package $o->{API}{pkg};\n$code";
+    croak "Unable to load Foo module $obj:\n$@" if $@;
 }
 
 sub info {

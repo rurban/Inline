@@ -26,7 +26,9 @@ Inline looks for ANSI/prototype style function definitions. They must be of the 
 
     return-type function-name ( type-name-pairs ) { ... }
 
-They also may only use the types: C<int>, C<long>, C<double>, C<char*>, and C<SV*>. A return type of C<void> may also be used. The following are examples of valid function definitions.
+The most common types are: C<int>, C<long>, C<double>, C<char*>, and C<SV*>. But you can use any type for which Inline can find a typemap. Inline uses the C<typemap> file distributed with Perl as the default. You can specify more typemaps with the TYPEMAPS configuration option. 
+
+A return type of C<void> may also be used. The following are examples of valid function definitions.
 
     int Foo(double num, char* str) {
     void Foo(double num, char* str) {
@@ -37,6 +39,7 @@ They also may only use the types: C<int>, C<long>, C<double>, C<char*>, and C<SV
 The following definitions would not be recognized:
 
     Foo(int i) {               # no return type
+    int Foo(float f) {         # no (default) typemap for float
     unsigned int Foo(int i) {  # 'unsigned int' not recognized
     int Foo(num, str) double num; char* str; {
     void Foo(void) {           # void only valid for return type
@@ -276,16 +279,14 @@ This example will take one string argument (a name) and print a greeting. The fu
 
 Notice that you do not need to C<#include <stdio.h>>. The C<perl.h> header file which gets included by default, automatically loads the standard C header files for you.
 
+    use Inline C;
     greet('Ingy');
     greet(42);
-    
-    use Inline C => <<'END_OF_C_CODE';
-    
+    __END__    
+    __C__
     void greet(char* name) {
       printf("Hello %s!\n", name);
     }
-    
-    END_OF_C_CODE
 
 =head2 Example #2 - and Salutations
 
@@ -293,31 +294,27 @@ This is similar to the last example except that the name is passed in as a C<SV*
 
 One problem is that C<SvPVX> doesn't automatically convert strings to numbers, so we get a little surprise when we try to greet C<42>. The program segfaults, a common occurence when delving into the guts of Perl.
 
+    use Inline C;
     greet('Ingy');
     greet(42);
-    
-    use Inline C => <<'END_OF_C_CODE';
-    
+    __END__    
+    __C__
     void greet(SV* sv_name) {
       printf("Hello %s!\n", SvPVX(sv_name));
     }
-    
-    END_OF_C_CODE
 
 =head2 Example #3 - Fixing the problem
 
 We can fix the problem in Example #2 by using the C<SvPV> function instead. This function will stringify the C<SV> if it does not contain a string. C<SvPV> returns the length of the string as it's second parameter. Since we don't care about the length, we can just put C<PL_na> there, which is a special variable designed for that purpose.
 
+    use Inline C;
     greet('Ingy');
     greet(42);
-    
-    use Inline C => <<'END_OF_C_CODE';
-    
+    __END__
+    __C__
     void greet(SV* sv_name) {
       printf("Hello %s!\n", SvPV(sv_name, PL_na));
     }
-    
-    END_OF_C_CODE
 
 =head1 SEE ALSO
 

@@ -2,20 +2,22 @@ INTRODUCTION:
 
 Inline.pm - Write Perl subroutines in other programming languages.
 
-Inline lets you write Perl subroutines in other programming languages like C. 
-You don't need to compile anything. All the details are handled transparently 
-so you can just run your Perl script like normal.
+Inline lets you write Perl subroutines in other programming languages 
+like C, C++, Java, Python, Tcl and even Assembly. You don't need to 
+compile anything. All the details are handled transparently so you 
+can just run your Perl script like normal.
 
 Example:
 
-    use Inline C => <<'END';
+    use Inline::Files;
+    use Inline C;
+    print JAxH('Inline'), "\n";
+    
+    __C__
     SV* JAxH(char* x) {
         return newSVpvf ("Just Another %s Hacker",x);
     }
-    END
     
-    print JAxH('Inline'), "\n";
-
 When run, this complete program prints:
 
     Just Another Inline Hacker
@@ -27,10 +29,19 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
-Inline version 0.34 fixes 2 minor bugs:
-
-+ Makefile.PL got confused on $Config::Config{cc} with full pathnames or flags
-+ Makefile.PL/Makefile dependency caused a problem in one rare case.
+Inline version 0.40 is a major upgrade. It includes:
++ Inline::MakeMaker
+  + Rock solid support for writing CPAN extension modules
++ Short file names. 
+  + No more _Inline/lib/auto/Foo_C_3cee729d1d942c6792ca5a741dc21879/Foo_C_3cee729d1d942c6792ca5a741dc21879.so
+  + Now it's _Inline/lib/auto/Foo/Foo.so
++ Support for creating binary distributions.
+  + Can even do it without shipping C source code.
++ Support for Damian Conway's Inline::Files
+  + No more __END__ markers.
++ Safe new config and caching format.
+  + Similar to Data::Denter format
++ New Inline-FAQ.pod.
 
 Inline version 0.33 is a minor upgrade with the following changes:
 

@@ -28,7 +28,7 @@ BEGIN {
     eval <<'END';
     use Inline 'force', 'hocum';
 END
-    ok($@ =~ /\Q${\ Inline::usage_shortcuts('hocum')}/);
+    ok($@ =~ /\Q${\ Inline::M48_usage_shortcuts('hocum')}/);
 }
 
 # test 3

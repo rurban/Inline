@@ -82,55 +82,123 @@ The most basic form for using Inline is:
 
     use Inline X => "X source code";
 
-where 'X' is one of the supported Inline programming languages. The second parameter specifies the source code that you want to bind to Perl. The source code can be specified in many ways, but most commonly it's a quoted string. A handy way to write the string is to use Perl's "here document" style of quoting. Like this:
+where 'X' is one of the supported Inline programming languages. The second parameter identifies the source code that you want to bind to Perl. The source code can be specified using any of the following syntaxes:
 
-    use Inline X => <<'END_OF_X';
+=over 4
+
+=item The DATA Keyword.
+
+    use Inline Java => 'DATA';
     
-       X source code goes here.
+    # Perl code goes here ...
     
-    END_OF_X
+    __DATA__
+    __Java__
+    /* Java code goes here ... */
 
-The source code can also be specified as a filename, a reference to a subroutine that returns source code, or a reference to an array that contains lines of source code.
+The easiest and most visually clean way to specify your source code in an Inline Perl program is to use the special C<DATA> keyword. This tells Inline to look for a special marker in your C<DATA> filehandle's input stream. In this example the special marker is C<__Java__>, which is the programming language surrounded by double underscores.
 
-If you want to specify the source code in a Perl variable, remember that C<'use'> is a compile time directive, so you'll need to set that variable in a C<BEGIN> block, before the C<use>.
+In case you've forgotten, the C<DATA> pseudo file is comprised of all the text after the C<__END__> or C<__DATA__> section of your program. If you're working outside the C<main> package, you'd best use the C<__DATA__> marker or else Inline will not find your code.
 
+Using this scheme keeps your Perl code at the top, and all the ugly Java stuff down below where it belongs. This is visually clean and makes for more maintainable code. An excellent side benefit is that you don't have to escape any characters like you might in a Perl string. The source code is verbatim. For these reasons, I prefer this method the most.
+
+The only problem with this style is that since Perl can't read the C<DATA> filehandle until runtime, it obviously can't bind your functions until runtime. The net effect of this is that you can't use your Inline functions as barewords (without predeclaring them) because Perl has no idea they exist during compile time.
+
+=item The FILE and BELOW keywords.
+
+    use Inline::Files;
+    use Inline Java => 'FILE';
+    
+    # Perl code goes here ...
+    
+    __JAVA__
+    /* Java code goes here ... */
+
+This is the newest method of specifying your source code. It makes use of the Perl module C<Inline::Files> written by Damian Conway. The basic style and meaning are the same as for the C<DATA> keyword, but there are a few syntactic and semantic twists.
+
+First, you must say 'use Inline::Files' before you 'use Inline' code that needs those files. The special 'C<DATA>' keyword is replaced by either 'C<FILE>' or 'C<BELOW>'. This allows for the bad pun idiom of:
+
+    use Inline C => 'BELOW';
+
+You can omit the C<__DATA__> tag now. Inline::Files is a source filter that will remove these sections from your program before Perl compiles it. They are then available for Inline to make use of. And since this can all be done at compile time, you don't have to worry about the caveats of the 'DATA' keyword.
+
+This module has a couple small gotchas. Since Inline::Files only recognizes file markers with capital letters, you must specify the capital form of your language name. Also, there is a startup time penalty for using a source code filter.
+
+At this point Inline::Files is alpha software and use of it is experimental. Inline's integration of this module is also fledgling at the time being. One of things I plan to do with Inline:files is to get line number info so when an extension doesn't compile, the error messages will point to the correct source file and line number.
+
+My best advice is to use Inline::Files for testing (especially as support for it improves), but use DATA for production and distributed/CPAN code.
+
+=item Strings
+
+    use Inline Java => <<'END';
+    
+    /* Java code goes here ... */
+    END
+    
+    # Perl code goes here ...
+
+You also just specify the source code as a single string. A handy way to write the string is to use Perl's "here document" style of quoting. This is ok for small functions but can get unwieldy in the large. It also has the unfortunate consequence that you need to escape any backslash characters.
+
+On the positive side, the string variant probably has the least startup penalty and all functions are bound at compile time.
+
+If you wish to put the string into a scalar variable, please be aware that the C<use> statement is a compile time directive. As such, all the variables it uses must also be set at compile time, C<before> the 'use Inline' statement. Here is one way to do it:
+
+    my $code;
     BEGIN {
-        $X = "X source code";
+        $code = <<END;
+    
+    /* Java code goes here ... */
+    END
     }
-    use Inline X => $X;
-
-An alternative to doing this is to specify the source code at run time using the 'Inline->bind()' method. (This is the one interface exception mentioned above) The C<bind()> method takes the same arguments as C<'use Inline ...'>.
-
-    use Inline;
-    $X = "X source code";
-    bind Inline X => $X;  # or Inline->bind(X => $X);
-
-=head2 Alternate Syntaxes
-
-Instead of specifying the source code as a here-document string, you may want to put it at the end of your script, after the C<__END__> statement. Then you can tell Inline to read it in from the C<DATA> filehandle, like this:
-
-    use Inline C => 'DATA';
+    use Inline Java => $code;
     
-    print "9 + 16 = ", add(9, 16), "\n";
-    print "9 - 16 = ", subtract(9, 16), "\n";
-    
-    __END__
-    
-    __C__
-        
-    int add(int x, int y) {
-      return x + y;
-    }
-    
-    int subtract(int x, int y) {
-      return x - y;
-    }
+    # Perl code goes here ...
 
-This syntax makes use of the source-file keyword, C<'DATA'>, and a special marker: C<__C__>. 'C' is the programming language you are binding to. Inline will read through the DATA filehandle and look for the special marker. It will use everything up until the next marker or the end of the file. 
 
-NOTE: The 'DATA' keyword can be ommitted if there are no extra parameters following it.
+=item The bind() Function
 
-If you are writing a module, you can also use the DATA section for POD and AutoLoader subroutines. Just be sure to put them before the first Inline marker. If you install the helper module L<Inline::Filters>, you can even use POD inside your Inline code. You just have to specify a filter to strip it out.
+An alternative to using the BEGIN block method is to specify the source code at run time using the 'Inline->bind()' method. (This is one of the interface exceptions mentioned above) The C<bind()> method takes the same arguments as C<'use Inline ...'>.
+
+    my $code = <<END;
+    
+    /* Java code goes here ... */
+    END
+    
+    Inline->bind(Java => $code);
+
+Although bind() is a powerful feature, it is not recommended for use in Inline based modules. In fact, it won't work at all for installable modules. See instructions below for creating modules with Inline.
+
+=item Other Methods
+
+The source code for Inline can also be specified as an external filename, a reference to a subroutine that returns source code, or a reference to an array that contains lines of source code. These methods are less frequently used but may be useful in some situations.
+
+=item Shorthand
+
+If you are using the 'DATA' or 'FILE' methods described above B<and> there are no extra parameters, you can omit the keyword altogether. For example:
+
+    use Inline 'Java';
+    
+    # Perl code goes here ...
+    
+    __DATA__
+    __Java__
+    /* Java code goes here ... */
+
+or
+
+    use Inline::Files;
+    use Inline 'Java';
+    
+    # Perl code goes here ...
+    
+    __JAVA__
+    /* Java code goes here ... */
+
+=back
+
+=head2 More about the DATA Section
+
+If you are writing a module, you can also use the DATA section for POD and AutoLoader subroutines. Just be sure to put them before the first Inline marker. If you install the helper module C<Inline::Filters>, you can even use POD inside your Inline code. You just have to specify a filter to strip it out.
 
 You can also specify multiple Inline sections, possibly in different programming languages. Here is another example:
 
@@ -168,7 +236,7 @@ You can also specify multiple Inline sections, possibly in different programming
     __Python__
     """A Python Section"""
 
-With a module you need to use C<__DATA__> instead of C<__END__>. An important thing to remember is that you need to have one "use Inline Foo => 'DATA'" for each "__Foo__" marker, and they must be in the same order. This allows you to apply different configuration options to each section.
+An important thing to remember is that you need to have one "use Inline Foo => 'DATA'" for each "__Foo__" marker, and they must be in the same order. This allows you to apply different configuration options to each section.
 
 NOTE: Versions of Inline prior to 0.30 suggested a syntax of:
 
@@ -310,8 +378,6 @@ When Inline needs to build something it creates a subdirectory under your C<DIRE
 
 If everything goes OK, Inline will delete this subdirectory. If there is an error, Inline will leave the directory intact and print its location. The idea is that you are supposed to go into that directory and figure out what happened.
 
-As a convenience, Inline copies your latest error directory to C<DIRECTORY/errors> and strips all of the MD5 hash codes out of the names. More debugging improvements are coming in future releases.
-
 Read the doc for your particular Inline language module for more information.
 
 =head2 The 'config' Registry File
@@ -333,6 +399,41 @@ Normally Inline will search in a bunch of known places for a directory called C<
 If you want to specify your own directory, use this configuration option.
 
 Note that you must create the C<DIRECTORY> directory yourself. Inline will not do it for you.
+
+=head2 NAME
+
+You can use this option to set the name of your Inline extension object module. For example:
+
+    use Inline C => 'DATA',
+               NAME => 'Foo::Bar';
+
+would cause your C code to be compiled in to the object:
+
+    lib/auto/Foo/Bar/Bar.so
+    lib/auto/Foo/Bar/Bar.inl
+
+(The .inl component contains dependency information to make sure the source code is in sync with the executable)
+
+If you don't use NAME, Inline will pick a name for you based on your program name or package name. In this case, Inline will also enable the AUTONAME option which mangles in a small peice of the MD5 fingerprint into your object name, to make it unique.
+
+=head2 AUTONAME
+
+This option is enabled whenever the NAME parameter is not specified. To disable it say:
+
+    use Inline C => 'DATA',
+               DISABLE => 'AUTONAME';
+
+AUTONAME mangles in enough of the MD5 fingerprint to make your module name unique. Objects created with AUTONAME will never get replaced. That also means they will never get cleaned up automatically. 
+
+AUTONAME is very useful for small throw away scripts. For more serious things, always use the NAME option.
+
+=head2 VERSION
+
+Specifies the version number of the Inline extension object. It is for use B<only> for modules, and it must match the global variable $VERSION. Additionally, this option should used if (and only if) a module is being set up to be installed permanently into the Perl sitelib tree. Inline will croak if you use it otherwise.
+
+The presence of the VERSION parameter is the official way to let Inline know that your code is an installable/installed module. Inline will never generate an object in the temporary cache (_Inline/ directory) if VERSION is set. It will also never try to recompile a module that was installed into someone's Perl site tree.
+
+So the basic rule is develop without VERSION, and deliver with VERSION.
 
 =head2 WITH
 
@@ -387,7 +488,7 @@ This option tells Inline to turn off any warnings.
 
 B<NOTE:> It is B<NOT> yet implemented.
 
-=head2 Inline Configuration Shortcuts
+=head1 Inline Configuration Shortcuts
 
 This is a list of all the shorcut configuration options  currently available for Inline. Specify them from the command line when running Inline scripts.
 
@@ -437,13 +538,7 @@ Turns SAFEMODE on. UNTAINT will turn this on automatically. While this mode perf
 
 =item SITE_INSTALL
 
-Says that compiled code should be installed in the Perl installation's "C<site_perl>" directory. Use this to permanently install an Inlined module.
-
-This is the one shortcut that is not normally used from the command line. You put a line like this at the top of a C<'test.pl'>:
-
-    use Inline SITE_INSTALL;
-
-This causes 'make test' to put the compiled results in the right place.
+This parameter used to be used for creating installable Inline modules. It has been removed from Inline altogether and replaced with a much simpler and more powerful mechanism, C<Inline::MakeMaker>. See the section below on how to create modules with Inline.
 
 =item UNSAFE
 
@@ -455,7 +550,7 @@ Turn the UNTAINT option on. Used with C<-T> switch.
 
 =item VERSION
 
-Tells Inline to report it's release version. Program will exit immediately after version is printed.
+Tells Inline to report its release version.
 
 =back
 
@@ -463,9 +558,9 @@ Tells Inline to report it's release version. Program will exit immediately after
 
 Writing CPAN modules that use other programming languages is easy with Inline. Let's say that you wanted to write a module called C<Math::Simple>. Start by using the following command:
 
-    h2xs -AXn Math::Simple
+    h2xs -PAXn Math::Simple
 
-This will generate a bunch of files that form a skeleton of what you need for a distributable module. Next, modify the C<Simple.pm> file to look like this:
+This will generate a bunch of files that form a skeleton of what you need for a distributable module. (Read the h2xs manpage to find out what the options do) Next, modify the C<Simple.pm> file to look like this:
 
     package Math::Simple;
     
@@ -473,12 +568,12 @@ This will generate a bunch of files that form a skeleton of what you need for a 
     use vars qw($VERSION @ISA @EXPORT_OK);
     require Exporter;
     @ISA = qw(Exporter);
-    @EXPORT_OK = qw(add subtract);
-    BEGIN {
-        $VERSION = '0.01';
-    }
+    @EXPORT_OK = qw(add subtract)
+    $VERSION = '0.20';
     
-    use Inline C => 'DATA';
+    use Inline C => 'DATA',
+               VERSION => '0.20',
+               NAME => 'Math::Simple';
     
     1;
     
@@ -497,20 +592,32 @@ This will generate a bunch of files that form a skeleton of what you need for a 
       return x - y;
     }
 
-Finally, you need to add the following line to the top of your C<test.pl> file:
+The important things to note here are that you B<must> specify a C<NAME> and C<VERSION> parameter. The NAME must match your package name or be an extension of it. For example C<Math::Simple::Part1> would work. The VERSION parameter must match the C<$VERSION> variable and they must be of the form C</\d\.\d\d/>.
 
-    use Inline SITE_INSTALL;
+NOTE: These are Inline's sanity checks to make sure you know what you're doing before uploading your code to CPAN. They insure that once the module has been installed on someone's system, the module would not get auotmatically recompiled for any reason. If a dependency is broken on an installed module, Inline will not load it, and will croak with an error message. This makes Inline based modules work in exactly the same manner as XS based ones.
 
-When the person installing C<Math::Simple> does a "C<make test>", the Inline module will compile the Inlined code and place the executable code into the C<./blib> directory. Then when a "C<make install>" is done, the module will be copied into Perl's C<$Config{installsitearch}> directory (which is where an installed module should go).
+Finally, you need to modify the Makefile.PL. Simply change:
+
+    use ExtUtils::MakeMaker;
+
+to
+
+    use Inline::MakeMaker;
+
+When the person installing C<Math::Simple> does a "C<make>", the generated Makefile will invoke Inline in such a way that the C code will be compiled and the executable code will be placed into the C<./blib> directory. Then when a "C<make install>" is done, the module will be copied into the appropiate Perl sitelib directory (which is where an installed module should go).
 
 Now all you need to do is:
 
     perl Makefile.PL
     make dist
 
-That will generate the file C<Math-Simple-0.01.tar.gz> which is a distributable package.
+That will generate the file C<Math-Simple-0.20.tar.gz> which is a distributable package. That's all there is to it.
 
-IMPORTANT NOTE: It has been determined that creating modules for CPAN using the above technique is doable, but not optimal. The basic problem is that there is no way to automatically remove old executable objects on subsequent releases. There are also some additional subtle problems. So, my official stance is to not use Inline for CPAN modules until Inline release 0.40 or greater. These issues will be resolved at that release level. This technique is still perfectly fine for personal use, if your not too concerned about have a few harmless artifacts in your site lib tree.
+IMPORTANT NOTE: Although the above steps will produce a workable module, you still have a few more responsibilities as a budding new CPAN author. You need to write lots of documentation and write lots of tests. Take a look at some of the better CPAN modules for ideas on creating a killer test harness. Actually, don't listen to me, go read these:
+
+    perldoc perlnewmod
+    http://www.cpan.org/modules/04pause.html
+    http://www.cpan.org/modules/00modlist.long.html
 
 =head1 How Inline Works
 
@@ -539,11 +646,12 @@ Source code that is stowed in the C<'DATA'> section of your code, is read in by 
 
 =item 2) Check if the Source Code has been Built
 
-Inline only needs to build the source code if it has not yet been built. It accomplishes this seemingly magical task in an extremely simple and straightforward manner. It runs the source text through the C<Digest::MD5> module to produce a 128-bit "fingerprint" which is virtually unique. The fingerprint (in hex) is I<mangled> with the current package name (and the script name, if the package is "C<main>") along with the name of the programming language, to form a unique name for the executable module. For instance, the C<C> code from C<examples/example001.pl> (see L<"Examples In C">) would mangle into:
+Inline only needs to build the source code if it has not yet been built. It accomplishes this seemingly magical task in an extremely simple and straightforward manner. It runs the source text through the C<Digest::MD5> module to produce a 128-bit "fingerprint" which is virtually unique. The fingerprint along with a bunch of other contingency information is stored in a C<.inl> file that sits next to your executable object. For instance, the C<C> code from a script called C<example.pl> might create these files:
 
- main_C_example001_pl_3a9a7ba88a8fb10714be625de5e701f1.so
+    example_pl_3a9a.so
+    example_pl_3a9a.inl
 
-If an executable with that name already exists, then proceed to step 8. (No compilation is necessary)
+If all the contingency information matches the values stored in the C<.inl> file, then proceed to step 8. (No compilation is necessary)
 
 =item 3) Find a Place to Build and Install
 
@@ -563,7 +671,7 @@ By default Inline will try to build and install under the first place that meets
 
 Failing that, Inline will croak. This is rare and easily remedied by just making a directory that Inline will use;
 
-If the C<SITE_INSTALL> option is in effect, then Inline will only use C<./_Inline/> to build in, and the C<$Config{installsitearch}> directory to install the executable in. This option is intended to be used in modules that are to be distributed on the CPAN, so that they get installed in the proper place.
+If the module option is being compiled for permanent installation, then Inline will only use C<./_Inline/> to build in, and the C<$Config{installsitearch}> directory to install the executable in. This action is caused by Inline::MakeMaker, and is intended to be used in modules that are to be distributed on the CPAN, so that they get installed in the proper place.
 
 =item 4) Parse the Source for Semantic Cues
 
@@ -595,6 +703,8 @@ For information about using Inline with C see L<Inline::C>.
 
 For sample programs using Inline with C see L<Inline::C-Cookbook>.
 
+For "Formerly Answered Questions" about Inline, see L<Inline-FAQ>.
+
 For information on supported languages and platforms see L<Inline-Support>.
 
 For information on writing your own Inline Language Support Module, see L<Inline-API>.
@@ -605,6 +715,8 @@ To subscribe, send email to inline-subscribe@perl.org
 
 =head1 BUGS AND DEFICIENCIES
 
+Inline.pm is B<BETA> software. Although it is a very powerful and widely used tool, it is still being developed and evolved. Inline B<will> go through some stages of non-backwards compatability. These will be rare and for good reason, and will always be discussed on the mailing list.
+
 When reporting a bug, please do the following:
 
  - Put "use Inline REPORTBUG;" at the top of your code, or
@@ -612,15 +724,7 @@ When reporting a bug, please do the following:
  - Run your code.
  - Follow the printed directions.
 
-Here are some things to watch out for:
-
-=over 4
-
-=item 1
-
-While Inline does attempt to clean up after itself, there is currently no functionality to remove a shared object when a new version is compiled. This will be addressed in version 0.40 and higher.
-
-=back
+Release 0.40 replaces the old method of module validation with a newer and more powerful one. But it is still new code and as such, open to new bugs. If you are using Inline in production, you may wish to stay on the latest 0.3x version until release 0.4x is known to be stable.
 
 =head1 AUTHOR
 

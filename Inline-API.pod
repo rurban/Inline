@@ -6,20 +6,18 @@ Inline-API - How to bind a programming language to Perl using Inline.pm
 
     #!/usr/bin/perl
     
-    say_it('foo');  # Use Foo++ to print "Hello, Foo"
+    use Inline Foo;
+    say_it('foo');  # Use Foo to print "Hello, Foo"
     
-    use Inline Foo => <<'EOFOO';
-    
-      /FOO  This is a function written in Foo++  OOF/    
-    
-      deefoon foonkshun say_it 
-        < fooprint "Hello,", arrrg(0) >
-    
-    EOFOO
+    __Foo__ 
+    foo-sub say_it {
+        foo-my $foo = foo-shift;
+        foo-print "Hello, $foo\n";
+    }
 
 =head1 DESCRIPTION
 
-So you think Inline C is pretty cool, but what you really need is for Perl to work with the brand new programming language "Foo++". Well you're in luck. C<Inline.pm> has support for adding your own Inline Language Support Module (B<ILSM>), like C<Inline::Foo>.
+So you think Inline C is pretty cool, but what you really need is for Perl to work with the brand new programming language "Foo". Well you're in luck. C<Inline.pm> has support for adding your own Inline Language Support Module (B<ILSM>), like C<Inline::Foo>.
 
 Inline has always been intended to work with lots of different programming languages. Many of the details can be shared between implementations, so that C<Inline::Java> has a similar interface to C<Inline::ASM>. All of the common code is in C<Inline.pm>. 
 
@@ -27,88 +25,121 @@ Language specific modules like C<Inline::Python> are subclasses of C<Inline.pm>.
 
 The Inline C support is probably the best boilerplate to copy from. Since version 0.30 all C support was isolated into the module C<Inline::C> and the parsing grammar is further broken out into C<Inline::C::grammar>. All of these components come with the Inline distribution.
 
-You may also wish to look at the joke language Inline::Foo which is distributed with Inline. It actually is a full functioning ILSM. I use it in Inline's test harness to test base Inline functionality. It is very short, and can help you get your head wrapped around the Inline API.
-
 This POD gives you all the details you need for implementing an ILSM. For further assistance, contact inline@perl.org See L<"SEE ALSO"> below.
+
+We'll examine the joke language Inline::Foo which is distributed with Inline. It actually is a full functioning ILSM. I use it in Inline's test harness to test base Inline functionality. It is very short, and can help you get your head wrapped around the Inline API.
 
 =head1 A Skeleton
 
-For the remainder of this tutorial, let's assume we're writing an ILSM for the ficticious language C<Foo++>. We'll call it C<Inline::FooPP>. Here is the skeleton Perl code you'll need to implement it.
+For the remainder of this tutorial, let's assume we're writing an ILSM for the ficticious language C<Foo>. We'll call it C<Inline::Foo>. Here is the entire (working) implementation.
 
-    package Inline::FooPP;
-    
+    package Inline::Foo;
     use strict;
+    $Inline::Foo::VERSION = '0.01';
+    @Inline::Foo::ISA = qw(Inline);
     require Inline;
-    require Inline::FooPP::grammar;
-    use Parse::RecDescent;
-    use Config;
     use Carp;
     
-    $Inline::FooPP::VERSION = '0.05';
-    @Inline::FooPP::ISA = qw(Inline);
-    
     #===========================================================
-    # Register Foo++ as an Inline Language Support Module (ILSM)
+    # Register Foo as an Inline Language Support Module (ILSM)
     #===========================================================
     sub register {
         return {
-                language => 'FooPP',
-                aliases => ['Foo++', 'F++'],
-                type => 'compiled',
-                suffix => $Config{so},
-               };
+            language => 'Foo',
+            aliases => ['foo'],
+            type => 'interpreted',
+            suffix => 'foo',
+           };
     }
     
-    #==================================
-    # Validate the Foo++ Config Options
-    #==================================
+    #===========================================================
+    # Error messages
+    #===========================================================
+    sub usage_config { 
+        my ($key) = @_;
+        "'$key' is not a valid config option for Inline::Foo\n";
+    }
+    
+    sub usage_config_bar { 
+        "Invalid value for Inline::Foo config option BAR";
+    }
+    
+    #===========================================================
+    # Validate the Foo Config Options
+    #===========================================================
     sub validate {
-        my $o = shift; # This is the Inline object
-    
-        $o->{ILSM} = {};
+        my $o = shift;
+        $o->{ILSM}{PATTERN} ||= 'foo-';
+        $o->{ILSM}{BAR} ||= 0;
         while (@_) {
-        my ($key, $value) = (shift, shift);
+        my ($key, $value) = splice @_, 0, 2;
+        if ($key eq 'PATTERN') {
+            $o->{ILSM}{PATTERN} = $value;
+            next;
+        }
         if ($key eq 'BAR') {
-            $o->{ILSM}{BAR} = $value;  # Store config value in object
+            croak usage_config_bar
+              unless $value =~ /^[01]$/;
+            $o->{ILSM}{BAR} = $value;
             next;
         }
-        if ($key eq 'BAZ') {
-            $o->{ILSM}{BAZ} = $value;
-            next;
-        }
-        croak "'$key' is not a valid config option for Inline::FooPP\n";
+        croak usage_config($key);
         }
     }
     
-    #=============================
-    # Parse and compile Foo++ code
-    #=============================
+    #===========================================================
+    # Parse and compile Foo code
+    #===========================================================
     sub build {
         my $o = shift;
-        $o->parse;
-        $o->compile;
+        my $code = $o->{API}{code};
+        my $pattern = $o->{ILSM}{PATTERN};
+        $code =~ s/$pattern//g;
+        $code =~ s/bar-//g if $o->{ILSM}{BAR};
+        sleep 1;             # imitate compile delay
+        {
+            package Foo::Tester;
+            eval $code;
+        }
+        croak "Foo build failed:\n$@" if $@;
+        my $path = "$o->{API}{install_lib}/auto/$o->{API}{modpname}";
+        my $obj = $o->{API}{location};
+        $o->mkpath($path) unless -d $path;
+        open FOO_OBJ, "> $obj"
+          or croak "Can't open $obj for output\n$!";
+        print FOO_OBJ $code;
+        close \*FOO_OBJ;
     }
     
-    #======================================
+    #===========================================================
     # Only needed for interpreted languages
-    #======================================
+    #===========================================================
     sub load {
         my $o = shift;
+        my $obj = $o->{API}{location};
+        open FOO_OBJ, "< $obj"
+          or croak "Can't open $obj for output\n$!";
+        my $code = join '', <FOO_OBJ>;
+        close \*FOO_OBJ;
+        eval "package $o->{API}{pkg};\n$code";
+        croak "Unable to load Foo module $obj:\n$@" if $@;
     }
     
-    #============================================
-    # Return a small report about the Foo++ code.
-    #============================================
+    #===========================================================
+    # Return a small report about the Foo code.
+    #===========================================================
     sub info {
         my $o = shift;
         my $text = <<'END';
-    This is a small report about the Foo++ code. Perhaps it contains
+    This is a small report about the Foo code. Perhaps it contains
     information about the functions the parser found which will be
     bound to Perl. It will get included in the text produced by the
     Inline 'INFO' command.
     END
         return $text;
     }
+    
+    1;
 
 Except for C<load()>, the subroutines in this code are mandatory for an ILSM. What they do is described below. A few things to note:
 
@@ -116,9 +147,9 @@ Except for C<load()>, the subroutines in this code are mandatory for an ILSM. Wh
 
 =item 1
 
-C<Inline::FooPP> must be a subclass of Inline. This is accomplished with:
+C<Inline::Foo> must be a subclass of Inline. This is accomplished with:
 
-    @Inline::FooPP::ISA = qw(Inline);
+    @Inline::Foo::ISA = qw(Inline);
 
 =item 2
 
@@ -128,13 +159,13 @@ The line 'C<require Inline;>' is not necessary. But it is there to remind you no
 
 Remember, it is not valid for a user to say:
 
-    use Inline::FooPP;
+    use Inline::Foo;
 
-C<Inline.pm> will detect such usage for you in its C<import> method, which is automatically inherited since C<Inline::FooPP> is a subclass.
+C<Inline.pm> will detect such usage for you in its C<import> method, which is automatically inherited since C<Inline::Foo> is a subclass.
 
 =item 4
 
-It is not necessary to implement your parsing with C<Parse::RecDescent>. But I recommend it. :-)
+In the build function, you normally need to parse your source code. Inline::C uses Parse::RecDescent to do this. Inline::Foo simply uses eval. (After we strip out all occurances of 'foo-').
 
 An alternative parsing method that works well for many ILSMs (like Java and Python) is to use the language's compiler itself to parse for you. This works as long as the compiler can be made to give back parse information.
 
@@ -144,18 +175,19 @@ An alternative parsing method that works well for many ILSMs (like Java and Pyth
 
 This section is a more formal specification of what functionality you'll need to provide to implement an ILSM.
 
-When Inline determines that some C<Foo++> code needs to be compiled it will automatically load your module. It will then call various subroutines which you need to supply. We'll call these subroutines "callbacks".
+When Inline determines that some C<Foo> code needs to be compiled it will automatically load your ILSM module. It will then call various subroutines which you need to supply. We'll call these subroutines "callbacks".
 
 You will need to provide the following 5 callback subroutines. 
 
 =head2 The register() Callback
 
-This subroutine receives no arguments. It returns a reference to a hash of ILSM meta-data. Inline calls this routine only when it is trying to detect new ILSM-s that have been installed on a given system. Here is an example of the has ref you would return for Foo++:
+This subroutine receives no arguments. It returns a reference to a hash of ILSM meta-data. Inline calls this routine only when it is trying to detect new ILSM-s that have been installed on a given system. Here is an example of the has ref you would return for Foo:
 
     {
-     language => 'FooPP',
-     aliases => ['Foo++', 'F++'],
-     type => 'compiled',
+     language => 'Foo',
+     aliases => ['foo'],
+     type => 'interpreted',
+     suffix => 'foo',
     };
 
 The meta-data items have the following meanings:
@@ -178,7 +210,7 @@ Must be set to 'compiled' or 'interpreted'. Indicates the category of the langua
 
 This is the file extension for the cached object that will be created. For 'compiled' languages, it will probably be 'so' or 'dll'. The appropriate value is in C<Config.pm>.
 
-For interpreted languages, this value can be whatever you want. Python uses C<pydat>.
+For interpreted languages, this value can be whatever you want. Python uses C<pydat>. Foo uses C<foo>.
 
 =back
 
@@ -188,7 +220,7 @@ This routine gets passed all configuration options that were not already handled
 
 =head2 The build() Callback
 
-This subroutine is responsible for doing the parsing and compilation of the Foo++ source code. The Inline is passed as the only argument. All pertinent information will be stored in this object. C<build()> is required to create a shared object of a specific name, or to croak with an appropriate error message. 
+This subroutine is responsible for doing the parsing and compilation of the Foo source code. The Inline object is passed as the only argument. All pertinent information will be stored in this object. C<build()> is required to create a cache object of a specific name, or to croak with an appropriate error message. 
 
 This is the meat of your ILSM. Since it will most likely be quite complicated, it is probably best that you study an existing ILSM like C<Inline::C>.
 
@@ -204,11 +236,11 @@ This method is called when the user makes use of the C<INFO> shortcut. You shoul
 
 =head1 The Inline Object
 
-C<Inline.pm> creates a hash based Perl object for each section of Inlined source code it receives. This object contains lots of information about the code, the environment, and the configuration options used. You are free to store any additional information in the object.
+C<Inline.pm> creates a hash based Perl object for each section of Inlined source code it receives. This object contains lots of information about the code, the environment, and the configuration options used.
 
-To prevent naming clashes with future version of Inline you use a subhash under the key 'ILSM'. This is the convention.
+This object is a hash that is broken into several subhashes. The only two subhashes that an ILSM should use at all are $o->{API} and $o->{ILSM}. The first one contains all of the information that Inline has gather for you in order for you to create/load a cached object of your design. The second one is a repository where your ILSM can freely store data that it might need later on.
 
-This section will describe all of the Inline object attributes.
+This section will describe all of the Inline object "API" attributes.
 
 =head2 The code Attribute
 
@@ -220,7 +252,7 @@ The proper name of the language being used.
 
 =head2 The language_id Attribute
 
-The language name specified by the user. Could be 'Foo++' instead of 'FooPP'.
+The language name specified by the user. Could be 'C++' instead of 'CPP'.
 
 =head2 The module Attribute
 
@@ -242,10 +274,6 @@ The version of C<Inline.pm> being used.
 
 The Perl package from which this invocation pf Inline was called.
 
-=head2 The parser Attribute
-
-This is the place where the Parse::RecDescent parser object is normally stored.
-
 =head2 The install_lib Attribute
 
 This is the directory to write the shared object into.
@@ -266,51 +294,7 @@ This is the full path name of the executable object in question.
 
 This is the shared library extension name. (Usually 'so' or 'dll').
 
-=head2 The mod_exists Attribute
-
-This is a flag indicating whether or not this module has already been compiled. (1 for true and 0 for false)
-
-=head2 The config Attribute
-
-This is where all of the non-language specific configuration options are stored.
-
 =over 4
-
-=item FORCE_BUILD
-
-Flag indicating whether or not Inline should call the C<Inline::FooPP::build()> method even if the code has already been compiled. (0 or 1)
-
-=item PRINT_VERSION
-
-Flag indicating whether or not Inline should print a version message. (0 or 1)
-
-=item CLEAN_AFTER_BUILD
-
-Flag indicating whether or not Inline should delete the contents of the build directory after a successful compilation (0 or 1)
-
-=item PRINT_INFO
-
-Flag indicating whether or not Inline should print an informational report about the code being compiled. (0 or 1)
-
-=item DIRECTORY
-
-The name of the base directory for building and installing Inline executables. 
-
-=item REPORTBUG
-
-Flag indicating whether or not Inline is in REPORTBUG mode. (0 or 1)
-
-=item CLEAN_BUILD_AREA
-
-Flag indicating whether or not Inline should perform a special cleanup function on the BLIB directory. (0 or 1)
-
-=item SITE_INSTALL
-
-Flag indicating whether or not the Inline code is meant to be part of a permanent module installation. (0 or 1)
-
-=item WITH
-
-A reference to an array of module names that Inline should poll for configuration hints.
 
 =back
 

@@ -8,7 +8,7 @@ use Data::Dumper;
 use Carp;
 use Cwd qw(cwd abs_path);
 
-$Inline::C::VERSION = '0.34';
+$Inline::C::VERSION = '0.40';
 @Inline::C::ISA = qw(Inline);
 
 #==============================================================================
@@ -113,7 +113,7 @@ END
 		    eval { require Inline::Filters };
 		    croak "'FILTERS' option requires Inline::Filters to be installed."
 		      if $@;
-		    %filters = Inline::Filters::get_filters($o->{language})
+		    %filters = Inline::Filters::get_filters($o->{API}{language})
 		      unless keys %filters;
 		    if (defined $filters{$val}) {
 			my $filter = Inline::Filters->new($val, 
@@ -220,10 +220,10 @@ sub build {
 sub info {
     my $o = shift;
     my $text = '';
-    $o->parse unless $o->{parser};
-    if (defined $o->{parser}{data}{functions}) {
-	$text .= "The following Inline $o->{language} function(s) have been successfully bound to Perl:\n";
-	my $parser = $o->{parser};
+    $o->parse unless $o->{ILSM}{parser};
+    if (defined $o->{ILSM}{parser}{data}{functions}) {
+	$text .= "The following Inline $o->{API}{language} function(s) have been successfully bound to Perl:\n";
+	my $parser = $o->{ILSM}{parser};
 	my $data = $parser->{data};
 	for my $function (sort @{$data->{functions}}) {
 	    my $return_type = $data->{function}{$function}{return_type};
@@ -234,7 +234,7 @@ sub info {
 	}
     }
     else {
-	$text .= "No $o->{language} functions have been successfully bound to Perl.\n\n";
+	$text .= "No $o->{API}{language} functions have been successfully bound to Perl.\n\n";
     }
     $text .= Inline::Struct::info($o) if $o->{STRUCT}{'.any'};
     return $text;
@@ -249,16 +249,22 @@ sub config {
 #==============================================================================
 sub parse {
     my $o = shift;
-    return if $o->{parser};
+    return if $o->{ILSM}{parser};
     my $grammar = Inline::C::grammar::grammar()
       or croak "Can't find C grammar\n";
     $o->get_maps;
     $o->get_types;
 
     $::RD_HINT++;
+    my $hack = sub { # Appease -w using Inline::Files
+	print Parse::RecDescent::IN '';
+        print Parse::RecDescent::IN '';
+	print Parse::RecDescent::TRACE_FILE '';
+        print Parse::RecDescent::TRACE_FILE '';
+    };
     require Parse::RecDescent;
-    my $parser = $o->{parser} = Parse::RecDescent->new($grammar);
-    $parser->{data}{typeconv} = $o->{typeconv};
+    my $parser = $o->{ILSM}{parser} = Parse::RecDescent->new($grammar);
+    $parser->{data}{typeconv} = $o->{ILSM}{typeconv};
 
     $o->{ILSM}{code} = $o->filter(@{$o->{ILSM}{FILTERS}});
     Inline::Struct::parse($o) if $o->{STRUCT}{'.any'};
@@ -361,11 +367,11 @@ sub get_types {
     (grep {defined $output_expr{$type_kind{$_}}}
     keys %type_kind), 'void';
 
-    $o->{typeconv}{type_kind} = \%type_kind;
-    $o->{typeconv}{input_expr} = \%input_expr;
-    $o->{typeconv}{output_expr} = \%output_expr;
-    $o->{typeconv}{valid_types} = \%valid_types;
-    $o->{typeconv}{valid_rtypes} = \%valid_rtypes;
+    $o->{ILSM}{typeconv}{type_kind} = \%type_kind;
+    $o->{ILSM}{typeconv}{input_expr} = \%input_expr;
+    $o->{ILSM}{typeconv}{output_expr} = \%output_expr;
+    $o->{ILSM}{typeconv}{valid_types} = \%valid_types;
+    $o->{ILSM}{typeconv}{valid_rtypes} = \%valid_rtypes;
 }
 
 sub ValidProtoString ($) {
@@ -397,13 +403,13 @@ sub C_string ($) {
 #==============================================================================
 sub write_XS {
     my $o = shift;
-    my ($pkg, $module, $modfname) = @{$o}{qw(pkg module modfname)};
+    my ($pkg, $module, $modfname) = @{$o->{API}}{qw(pkg module modfname)};
     my $prefix = (($o->{ILSM}{XS}{PREFIX}) ?
 		  "PREFIX = $o->{ILSM}{XS}{PREFIX}" :
 		  '');
 		  
-    $o->mkpath($o->{build_dir});
-    open XS, "> $o->{build_dir}/$modfname.xs"
+    $o->mkpath($o->{API}{build_dir});
+    open XS, "> $o->{API}{build_dir}/$modfname.xs"
       or croak $!;
     print XS <<END;
 $o->{ILSM}{AUTO_INCLUDE}
@@ -415,7 +421,7 @@ MODULE = $module	PACKAGE = $pkg	$prefix
 
 PROTOTYPES: DISABLE
 END
-    my $parser = $o->{parser};
+    my $parser = $o->{ILSM}{parser};
     my $data = $parser->{data};
 
     warn("Warning. No Inline C functions bound to Perl\n" .
@@ -489,7 +495,7 @@ END
 sub write_Inline_headers {
     my $o = shift;
 
-    open HEADER, "> $o->{build_dir}/INLINE.h"
+    open HEADER, "> $o->{API}{build_dir}/INLINE.h"
       or croak;
 
     print HEADER <<'END';
@@ -529,18 +535,18 @@ END
 #==============================================================================
 sub write_Makefile_PL {
     my $o = shift;
-    $o->{xsubppargs} = '';
+    $o->{ILSM}{xsubppargs} = '';
     for (@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}) {
-	$o->{xsubppargs} .= "-typemap $_ ";
+	$o->{ILSM}{xsubppargs} .= "-typemap $_ ";
     }
 
     my %options = (
-		   VERSION => '0.00',
+		   VERSION => $o->{API}{version} || '0.00',
 		   %{$o->{ILSM}{MAKEFILE}},
-		   NAME => $o->{module},
+		   NAME => $o->{API}{module},
 		  );
     
-    open MF, "> $o->{build_dir}/Makefile.PL"
+    open MF, "> $o->{API}{build_dir}/Makefile.PL"
       or croak;
     
     print MF <<END;
@@ -569,7 +575,7 @@ sub compile {
     my ($o, $perl, $make, $cmd, $cwd);
     $o = shift;
     my ($module, $modpname, $modfname, $build_dir, $install_lib) = 
-      @{$o}{qw(module modpname modfname build_dir install_lib)};
+      @{$o->{API}}{qw(module modpname modfname build_dir install_lib)};
 
     -f ($perl = $Config::Config{perlpath})
       or croak "Can't locate your perl binary";
@@ -589,11 +595,11 @@ sub compile {
 	    ($cmd) = $cmd =~ /(.*)/ if $o->UNTAINT;
 	    chdir $build_dir;
 	    system($cmd) and do {
-		$o->error_copy;
+#		$o->error_copy;
 		croak <<END;
 
 A problem was encountered while attempting to compile and install your Inline
-$o->{language} code. The command that failed was:
+$o->{API}{language} code. The command that failed was:
   $cmd
 
 The build directory was:
@@ -607,10 +613,8 @@ END
 	}
     }
 
-    if ($o->{config}{CLEAN_AFTER_BUILD} and 
-	not $o->{config}{REPORTBUG}
-       ) {
-	$o->rmpath($o->{config}{DIRECTORY} . 'build/', $modpname);
+    if ($o->{API}{cleanup}) {
+	$o->rmpath($o->{API}{directory} . '/build/', $modpname);
 	unlink "$install_lib/auto/$modpname/.packlist";
 	unlink "$install_lib/auto/$modpname/$modfname.bs";
 	unlink "$install_lib/auto/$modpname/$modfname.exp"; #MSWin32 VC++
@@ -632,20 +636,21 @@ sub fix_make {
     my (@lines, $fix);
     my $o = shift;
 
-    $o->{installdirs} = 'site';
+    $o->{ILSM}{install_lib} = $o->{API}{install_lib};
+    $o->{ILSM}{installdirs} = 'site';
     
-    open(MAKEFILE, "< $o->{build_dir}Makefile")
+    open(MAKEFILE, "< $o->{API}{build_dir}/Makefile")
       or croak "Can't open Makefile for input: $!\n";
     @lines = <MAKEFILE>;
     close MAKEFILE;
 
-    open(MAKEFILE, "> $o->{build_dir}Makefile")
+    open(MAKEFILE, "> $o->{API}{build_dir}/Makefile")
       or croak "Can't open Makefile for output: $!\n";
     for (@lines) {
 	if (/^(\w+)\s*=\s*\S+.*$/ and
 	    $fix = $fixes{$1}
 	   ) {
-	    print MAKEFILE "$1 = $o->{$fix}\n"
+	    print MAKEFILE "$1 = $o->{ILSM}{$fix}\n"
 	}
 	else {
 	    print MAKEFILE;

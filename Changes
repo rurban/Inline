@@ -1,5 +1,63 @@
 Revision history for Perl extension Inline.
 
+0.40  Sun May 27 18:59:59 PDT 2001
+	- Bugfix. NAME not set right without AUTONAME.
+
+0.40  Sat May 26 13:41:18 PDT 2001
+	- TRIAL8 of Inline-0.40
+	  Added option to distribute binary PPM modules with or without source.
+	  Got UNTAINT to work again.
+
+0.40  Wed May 23 18:19:16 PDT 2001
+	- TRIAL7 of Inline-0.40
+	  Fixed path bus for MacOS. Thanks Marcel.
+	  'with' works again (with Event)
+	  Inline::MakeMaker adds WriteMakefile dependency for Inline 0.40
+
+0.40  Wed May 23 01:14:23 PDT 2001
+	- TRIAL6 of Inline-0.40
+ 	  Made Denter YAML compliant
+	  Croak on usage of SITE_INSTALL
+	  Update Inline.pod for 0.40 features
+	  Detect and croak on old config files
+
+0.40  Mon May 21 18:06:30 PDT 2001
+	- TRIAL5 of Inline-0.40
+	  Added alpha support for Inline::Files
+	  Made all internal path names canonical
+
+0.40  Sun May 13 23:38:26 PDT 2001
+	- Finished TRIAL1 version of Inline-0.40
+	  Short object names
+          Safer config generation
+          AUTONAME support
+          Reinstituted AutoLoading
+          Put all messages into subroutines inside Inline.pm
+
+0.40  Wed May  9 11:14:47 PDT 2001
+	- Completely reorganized the Inline internal object into major groups:
+	  API - Contract space for the ILSMs. Guaranteed backwards compatible
+	        after Inline 1.00.
+	  ILSM - Private space for ILSMs
+	  INLINE - Private Inline space. Subject to constant change.
+	  CONFIG - Config options. Not for use by ILSMs
+	  MATCH - Matching criteria for the object.
+	  STRUCT - Reserved for Inline::Struct	  
+
+0.40  Wed May  9 11:14:47 PDT 2001
+	- Added command proxy logic for Inline::MakeMaker utilities:
+	  INSTALL, MAKEDIST, MAKEPPD
+
+0.40  Wed May  9 11:14:47 PDT 2001
+	- Got _INSTALL_ option working with Inline::MakeMaker
+
+0.40  Sun Apr 29 13:58:40 PDT 2001
+	- Replaced Inline's use of Data::Dumper with Inline::Denter.
+ 	  This is a stripped down version of Data::Denter. This change
+	  makes Inline more secure because it doesn't need to eval()
+	  untrusted code. Also removes the dependency on Safe.pm which has
+	  known security flaws. Yay!
+
 0.33  Sat Apr 28 20:20:29 PDT 2001
 	- 'require FindBin' instead of 'use FindBin' for mod_perl.
 

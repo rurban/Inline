@@ -1,5 +1,13 @@
 Revision history for Perl extension Inline::C.
 
+0.40  Sat May 26 13:47:16 PDT 2001
+	- Added hack to make work with Inline::Files and +w
+
+0.40  Wed May 23 20:21:32 PDT 2001
+	- 0.40 integration
+	  Changed object references
+	  Account for no trailing '/' in paths
+
 0.34  Sun May  6 16:56:53 PDT 2001
 	- Changed the generated Makefile.PL to not create any dependencies 
 	  between Makefile and Makefile.PL. This was creating a problem on

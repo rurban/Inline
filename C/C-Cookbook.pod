@@ -266,6 +266,51 @@ Richard Anderson <starfire@zipcon.net> contributed the original idea for this sn
 
 =cut --------------------------------------------------------------------------
 
+=head2 Multiple Return Values (Another Way)
+
+=over 4
+
+=item Problem
+
+How can I pass back more than one value without using the Perl Stack?
+
+=item Solution
+
+    use Inline::Files;
+    use Inline C;
+    
+    my ($foo, $bar);
+    change($foo, $bar);
+    
+    print "\$foo = $foo\n";
+    print "\$bar = $bar\n";
+    
+    __C__
+    
+    int change(SV* var1, SV* var2) {
+        sv_setpvn(var1, "Perl Rocks!", 11);
+        sv_setpvn(var2, "Inline Rules!", 13);
+        return 1;
+    }
+
+=item Discussion
+
+Most perl function interfaces return values as a list of one or more scalars. Very few like C<chomp>, will modify an input scalar in place. On the other hand, in C you do this quite often. Values are passed in by reference and modified in place by the called function.
+
+It turns out that we can do that with Inline as well. The secret is to use a type of 'C<SV*>' for each argument that is to be modified. This ensures passing by reference, because no typemapping is needed.
+
+The function can then use the Perl5 API to operate on that argument. When control returns to Perl, the argument will retain the value set by the C function. In this example we passed in 2 empty scalars and assigned values directly to them.
+
+=item See Also
+
+=item Credits
+
+Ned Konz <ned@bike-nomad.com> brought this behavior to my attention. He also pointed out that he is not the world famous computer cyclist Steve Roberts (http://www.microship.com), but he is close (http://bike-nomad.com). Thanks Ned.
+
+=back
+
+=cut --------------------------------------------------------------------------
+
 =head2 Using Memory
 
 =over 4
@@ -396,7 +441,7 @@ How do I use Inline with mod_perl?
 
 This is a fully functional mod_perl handler that prints out the factorial values for the numbers 1 to 100. Since we are using Inline under mod_perl, there are a few considerations to , um, consider.
 
-First, mod_perl handlers are usually run with -T taint detection. Therefore, we need to enable the UNTAINT option. The next thing to deal with is the fact that this handler will most likely be loaded after Perl's compile time. Since we are using the DATA section, we need to use the special C<init()> call. And of course we need to specify a DIRECTORY that mod_perl can compile into. I<See the above CGI example for more info.>
+First, mod_perl handlers are usually run with C<-T> taint detection. Therefore, we need to enable the UNTAINT option. The next thing to deal with is the fact that this handler will most likely be loaded after Perl's compile time. Since we are using the DATA section, we need to use the special C<init()> call. And of course we need to specify a DIRECTORY that mod_perl can compile into. I<See the above CGI example for more info.>
 
 Other than that, this is a pretty straightforward mod_perl handler, tuned for even more speed! 
 

@@ -1,16 +1,13 @@
-use lib qw(../blib/lib ./blib/lib);
 use strict;
 use Test;
-use diagnostics;
-use Inline Config => DIRECTORY => './_Inline_test';
-
 BEGIN {
     plan(tests => 1,
 	 todo => [],
 	 onfail => sub {},
 	);
 }
-
+use Inline Config => 
+           DIRECTORY => './_Inline_test';
 use Inline 'C';
 
 $main::myvar = $main::myvar = "myvalue";
