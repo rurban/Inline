@@ -1,5 +1,9 @@
 Revision history for Perl extension Inline.
 
+0.30  Thu Sep 14 20:51:11 PDT 2000
+	- localize $/ and $\ to shield them from things like 'perl -l'.
+	Thanks Michael Schwern.
+
 0.25  Fri Sep  1 10:07:33 PDT 2000
 	- Use MD5 on unmodified code only. User must force recompile if 
 	auto_headers change. This would have caused existing installs to break.

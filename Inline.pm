@@ -6,7 +6,7 @@ use vars qw($VERSION @ISA);
 use AutoLoader 'AUTOLOAD';
 require DynaLoader;
 @ISA = qw(DynaLoader AutoLoader);
-$VERSION = '0.25';
+$VERSION = '0.26';
 
 use Inline::Config;
 use Config;
@@ -21,6 +21,12 @@ my %supported_languages = (C => 1);
 # "use Inline" will invoke the import sub automatically.
 #==============================================================================
 sub import {
+    # shield Special vars from user changes (like "perl -l")
+    local $/ = "\n";
+    local $\;
+    local $" = ' ';
+    local $,;
+
     my $o = bless {
 		   version => $Inline::VERSION,
 		  }, shift;

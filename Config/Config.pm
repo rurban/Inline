@@ -17,7 +17,7 @@ use vars qw($VERSION
 	    $AUTOLOAD
 	    $INSTALL_SUFFIX
 	   );
-$VERSION = '0.25';
+$VERSION = '0.26';
 
 use Config;
 use Carp;

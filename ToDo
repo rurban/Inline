@@ -1,11 +1,37 @@
-# Make pod link together correctly.
-# Update doc for new Inline_Stack_???? macros.
-# Finish C tutorial
-
+### TESTING ###
 # Add tests to harness
+# Beef up testing
+# Use ./mktest on Windows w/ Cygwin
+# Test on native Windows box
+# Test each new typemap type
 
-# Add type modifiers to the C grammar.
-# Allow a typemapping mechanism that extends the grammar.
-# Replace XS generation w/ C generation.
-  # May require release specific code.
+### DEBUGGING ###
+# Add features for easier user debugging
+
+### Event.pm ###
+# Add Event.pm findings to doc
+# Work with Joshua Pritikin to enhance for Event.pm
+# Investigate "use Inline with => Event, Foo;" syntax
+
+### REWORKING ###
+# Use "sub INIT {" to delay compilation.
+# Make Inline::Config more OO. Allow multiple packages to use different configs
+# Deprecate the use of global config variables (use methods only)
+
+### SYNTAX ###
+# Allow "use Inline from => 'DATA';" and __C__ or __Fortran__ etc.
+# Make Inline work with AutoLoader
+# Allow mixture of POD and Inline code in __DATA__
+
+### TYPEMAPPING ###
+# Add functionality to specify new types in perl code instead of typemaps.
+
+### CLEANUP ###
 # Work out a method to clean old shared objects out of 'site_perl' when new versions are installed. Should prolly be invoked by "make install".
+
+### INVESTIGATE ###
+# How to access symbols across separate inlined modules. (extern?)
+
+### C Perl Run (CPR) ###
+# Add initial support for CPR
+# Write the CPR interpreter
