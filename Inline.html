@@ -1,0 +1,917 @@
+<HTML>
+<HEAD>
+<TITLE>B<Inline> - Use other languages inside your Perl scripts and modules.</TITLE>
+<LINK REV="made" HREF="mailto:ingy@armstrong.local.home">
+</HEAD>
+
+<BODY>
+
+<!-- INDEX BEGIN -->
+
+<UL>
+
+	<LI><A HREF="#NAME">NAME</A>
+	<LI><A HREF="#SYNOPSIS">SYNOPSIS</A>
+	<LI><A HREF="#DESCRIPTION">DESCRIPTION</A>
+	<UL>
+
+		<LI><A HREF="#Overview">Overview</A>
+		<LI><A HREF="#Why_Inline_">Why Inline?</A>
+		<LI><A HREF="#How_it_works">How it works</A>
+		<LI><A HREF="#C_Perl_Bindings">C-Perl Bindings</A>
+		<LI><A HREF="#Writing_C_Subroutines">Writing C Subroutines</A>
+		<LI><A HREF="#Configuration">Configuration</A>
+		<LI><A HREF="#Configuration_from_the_Command_L">Configuration from the Command Line</A>
+		<LI><A HREF="#Writing_Modules_with_Inline">Writing Modules with Inline</A>
+		<LI><A HREF="#Fancy_Tricks">Fancy Tricks</A>
+	</UL>
+
+	<LI><A HREF="#Examples_In_C">Examples In C</A>
+	<UL>
+
+		<LI><A HREF="#Example_1_Greetings">Example #1 - Greetings</A>
+		<LI><A HREF="#Example_2_and_Salutations">Example #2 - and Salutations</A>
+		<LI><A HREF="#Example_3_Fixing_the_problem">Example #3 - Fixing the problem</A>
+		<LI><A HREF="#Example_4_Return_to_Sender">Example #4 - Return to Sender</A>
+		<LI><A HREF="#Example_5_The_Welcome_Wagon">Example #5 - The Welcome Wagon</A>
+		<LI><A HREF="#Example_6_Stop_Repeating_Your">Example #6 - Stop Repeating Yourself</A>
+		<LI><A HREF="#Example_7_The_Ugly">Example #7 - The Ugly</A>
+	</UL>
+
+	<LI><A HREF="#SUPPORTED_LANGUAGES">SUPPORTED LANGUAGES</A>
+	<LI><A HREF="#SUPPORTED_PLATFORMS">SUPPORTED PLATFORMS</A>
+	<LI><A HREF="#BUGS_AND_DEFICIENCIES">BUGS AND DEFICIENCIES</A>
+	<LI><A HREF="#AUTHOR">AUTHOR</A>
+	<LI><A HREF="#COPYRIGHT">COPYRIGHT</A>
+</UL>
+<!-- INDEX END -->
+
+<HR>
+<P>
+<H1><A NAME="NAME">NAME</A></H1>
+<P>
+<STRONG>Inline</STRONG> - Use other languages inside your Perl scripts and modules.
+
+<P>
+<HR>
+<H1><A NAME="SYNOPSIS">SYNOPSIS</A></H1>
+<P>
+<PRE>    print &quot;9 + 16 = &quot;, add(9, 16), &quot;\n&quot;;
+    print &quot;9 - 16 = &quot;, subtract(9, 16), &quot;\n&quot;;
+ 
+    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+    
+    int add(int x, int y) {
+      return x + y;
+    }
+ 
+    int subtract(int x, int y) {
+      return x - y;
+    }
+   
+    END_OF_C_CODE
+</PRE>
+<P>
+<HR>
+<H1><A NAME="DESCRIPTION">DESCRIPTION</A></H1>
+<P>
+<HR>
+<H2><A NAME="Overview">Overview</A></H2>
+<P>
+The <CODE>Inline</CODE> module allows you to put source code from other programming languages
+directly ``Inline'' in a Perl script or module. The code is automatically
+compiled as needed, and then loaded for immediate access from Perl.
+
+<P>
+<CODE>Inline</CODE> saves you from the hassle of having to write and compile your own glue code
+using facilities like XS or SWIG. Simply type the code where you want it
+and run your Perl as normal. All the hairy details are handled for you. The
+compilation and installation of your code chunks all happen transparently;
+all you will notice is the delay of compilation.
+
+<P>
+The <CODE>Inline</CODE> code only gets compiled the first time you run it (or whenever it is
+modified) so you only take the performance hit once. Code that is Inlined
+into distributed modules (like on the CPAN) will get compiled when the
+module is installed (during ``<CODE>make test</CODE>''), so the end user will never notice the compilation time.
+
+<P>
+<HR>
+<H2><A NAME="Why_Inline_">Why Inline?</A></H2>
+<P>
+Do you want to know ``Why would I use other languages in Perl?'' or ``Why
+should I use <CODE>Inline</CODE> to do it?''? I'll try to answer both.
+
+<DL>
+<DT><STRONG><A NAME="item_Why">Why would I use other languages in Perl?</A></STRONG><DD>
+<P>
+The most obvious reason is performance. For an interpreted language, Perl
+is extremely fast. But like my co-workers say ``Anything Perl can do, C can
+do faster''. (They never mention the development time ;-) Anyway, you may
+be able to remove a bottleneck in your Perl code by using another language,
+without having to write the entire program in that language. This keeps
+your overall development time down, because you're using Perl for all of
+the non-critical code.
+
+<P>
+Another reason is to access functionality from existing API-s that use the
+language. Some of this code may only be available in binary form. But by
+creating small subroutines in the native language, you can ``glue''
+existing libraries to your Perl. As a user of the CPAN, you know that code
+reuse is a good thing. So why throw away those Fortran libraries just yet?
+
+<P>
+Maybe the best reason is ``Because you want to!''. Diversity keeps the
+world interesting. TMTOWTDI!
+
+<DT><STRONG>Why should I use Inline to do it?</STRONG><DD>
+<P>
+There are already two major facilities for extending Perl with C. They are
+XS and SWIG. Now if you're familiar with either, then I may be preaching to
+the choir. Well, here goes:
+
+<P>
+<PRE> &lt;SERMON&gt;
+</PRE>
+<P>
+Greetings congregation. This morning I want to open your eyes to the
+virtues of <STRONG>Inline</STRONG> and the perils of <STRONG>XS</STRONG>. Let us compare the two.
+
+<P>
+---
+
+<P>
+<STRONG>Inline -</STRONG> You can use it from a regular script.
+
+<P>
+<STRONG>XS -</STRONG> Requires you to create a module and an XS file and a makefile, in addition
+to your regular script. Actually, the program <CODE>h2xs</CODE> does a nice job of getting you started, but that's still a lot of junk to
+maintain.
+
+<P>
+---
+
+<P>
+<STRONG>XS -</STRONG> You need rebuild every time you want to test a small change.
+
+<P>
+<STRONG>Inline -</STRONG> Perl programmers cannot be bothered with silly things like compiling.
+``Tweak, Run, Tweak, Run'' is our way of life. <CODE>Inline</CODE> does all the dirty work for you.
+
+<P>
+---
+
+<P>
+<STRONG>XS -</STRONG> There is a difficult learning curve involved with setting up and using the
+XS environment. (At least for a simple Perl preacher like me.) Read the
+following perldocs and man pages if you don't believe me:
+
+<P>
+<PRE> * perlxs
+ * perlxstut
+ * perlapi
+ * perlguts
+ * perlmod
+ * h2xs
+ * xsubpp
+ * ExtUtils::MakeMaker
+</PRE>
+<P>
+<STRONG>Inline -</STRONG> Fuh-GED-ah-bow-dit!
+
+<P>
+---
+
+<P>
+<STRONG>XS -</STRONG> Only implements C and C++.
+
+<P>
+<STRONG>Inline -</STRONG> Plans to implement several languages. For now, <CODE>Inline</CODE> only implements C and it uses XS to do it. (Dirty little secret) But this
+is the right thing to do. See <A HREF="#SUPPORTED_LANGUAGES">SUPPORTED LANGUAGES</A> below. I too believe in code reuse, and XS is good code. (as long as you
+don't actually need to write it yourself :^)
+
+<P>
+---
+
+<P>
+Amen.
+
+<P>
+<PRE> &lt;/SERMON&gt;
+</PRE>
+</DL>
+<P>
+In actuality, XS is quite powerful for all of its madness. <CODE>Inline</CODE> only generates a minimal subset of XS mappings. (See <A HREF="#C_Perl_Bindings">C-Perl Bindings</A> below) But that should be enough to do what you need to. If not, give XS a
+try. Also, <CODE>h2xs</CODE> attempts to map header files to glue code which can be very handy when it
+works. <CODE>Inline</CODE> has no such facility.
+
+<P>
+I also think that its important to understand what's going on under the
+hood. It gives you the power to do more complicated things. So read all of
+those perldocs when you get a chance. In the meantime, just ``<CODE>use Inline</CODE>''!
+
+<P>
+<HR>
+<H2><A NAME="How_it_works">How it works</A></H2>
+<P>
+<CODE>Inline</CODE> performs the following steps:
+
+<OL>
+<LI><STRONG><A NAME="item__Receive_the_Source_Code">) Receive the Source Code</A></STRONG>
+<P>
+<CODE>Inline</CODE> gets the source code from your script or module with a statement like the
+following:
+
+<P>
+<PRE> use Inline C =&gt; Source-Code;
+</PRE>
+<P>
+where <CODE>C</CODE> is the programming language of the source code, and <CODE>Source-Code</CODE> is a string (most easily represented by using the ``Here Document'' quoting
+style; see <A HREF="#SYNOPSIS">SYNOPSIS</A> above), a file name, an open file handle, or a reference to a subroutine
+(that will return source code).
+
+<P>
+Since <CODE>Inline</CODE> is coded in a ``<CODE>use</CODE>'' statement, everything is done during Perl's compile time. If anything
+needs to be done that will affect the <CODE>Source-Code</CODE> string, it needs to be done in a <CODE>BEGIN</CODE> block that is <EM>before</EM> the ``<CODE>use Inline ...</CODE>'' statement. This might include setting interpolated variables, or setting
+options in the <CODE>Inline::Config</CODE> module.
+
+<LI><STRONG><A NAME="item__Check_if_the_Source_Code_has_b">) Check if the Source Code has been Compiled</A></STRONG>
+<P>
+<CODE>Inline</CODE> only needs to compile the source code if it has not yet been compiled. It
+accomplishes this seemingly magical task in an extremely simple and
+straightforward manner. It runs the source text through the <CODE>Digest::MD5</CODE> module to produce a 128-bit ``fingerprint'' which is virtually unique. The
+fingerprint (in hex) is combined with the current package name (and the
+script name, if the package is ``<CODE>main</CODE>'') to form a unique name for the executable module (shared object). If an
+executable with that name already exists, then proceed to step 8. (No
+compilation is necessary)
+
+<LI><STRONG><A NAME="item__Find_a_Place_to_Build_and_Inst">) Find a Place to Build and Install</A></STRONG>
+<P>
+At this point we know we need to compile the source code. The first thing
+to figure out is where to create the great big mess associated with
+compilation, and the second thing is where to put the module when its done.
+
+<P>
+By default <CODE>Inline</CODE> will try to build under the first one of the following places that is a
+valid directory and is writable:
+
+<P>
+<PRE> - $ENV{PERL_INLINE} # the PERL_INLINE environment variable
+ - ~/.blib_I/
+ - ~/blib_I/
+ - $bin/blib_I/      # the directory that the script is in
+ - ./blib_I/
+ - /tmp/blib_I/
+ - $bin/blib_I/      # will mkdir if -w $bin/
+ - ./blib_I/         # will mkdir if -w ./
+</PRE>
+<P>
+(where <CODE>$bin</CODE> is the script directory returned by <CODE>FindBin.pm</CODE>)
+
+<P>
+It will then try to install the executable under the same directory or in
+the <CODE>Config{installsitearch}</CODE> directory if <CODE>$Inline::Config::SITE_INSTALL=1</CODE>.
+
+<P>
+Optionally, you can configure <CODE>Inline</CODE> to build and install exactly where you want. See <A HREF="/Inline/Config.html">Inline::Config</A>.
+
+<LI><STRONG><A NAME="item__Parse_the_Source_for_Semantic_">) Parse the Source for Semantic Cues</A></STRONG>
+<P>
+<CODE>Inline</CODE> uses the module <CODE>Parse::RecDescent</CODE> to parse through your chunks of source code and look for things that it can
+create run-time bindings to. For instance, in <CODE>C</CODE> it looks for all of the function definitions and breaks them down into
+names and data types. These elements are used to correctly bind the <CODE>C</CODE> function to a <CODE>Perl</CODE> subroutine.
+
+<LI><STRONG><A NAME="item__Create_the_Build_Environment">) Create the Build Environment</A></STRONG>
+<P>
+Now <CODE>Inline</CODE> can take all of the gathered information and create an environment to build
+your source code into an executable. Without going into all the details, it
+just creates the appropriate directories, creates the appropriate source
+files including an XS file and a <CODE>Makefile.PL</CODE>.
+
+<LI><STRONG><A NAME="item__Compile_the_Code_and_Install_t">) Compile the Code and Install the Executable</A></STRONG>
+<P>
+The planets are in alignment. Now for the easy part. <CODE>Inline</CODE> just does what you would do to install a module. ``<CODE>perl Makefile.PL &amp;&amp; make &amp;&amp; make test &amp;&amp; make install</CODE>''. If something goes awry, <CODE>Inline</CODE> will croak with a message indicating where to look for more info.
+
+<LI><STRONG><A NAME="item__Tidy_Up">) Tidy Up</A></STRONG>
+<P>
+By default, <CODE>Inline</CODE> will remove all of the mess created by the build process, assuming that
+everything worked. If the compile fails, <CODE>Inline</CODE> will leave everything intact, so that you can debug your errors. Setting <CODE>$Inline::Config::CLEAN_AFTER_BUILD=0</CODE> will also stop <CODE>Inline</CODE> from cleaning up.
+
+<LI><STRONG><A NAME="item__DynaLoad_the_Executable">) DynaLoad the Executable</A></STRONG>
+<P>
+<CODE>Inline</CODE> uses the <CODE>DynaLoader::bootstrap</CODE> method to pull your external module into <CODE>Perl</CODE> space. Now you can call all of your external functions like Perl
+subroutines. Wheeee!
+
+</OL>
+<P>
+<HR>
+<H2><A NAME="C_Perl_Bindings">C-Perl Bindings</A></H2>
+<P>
+This section describes how the <CODE>Perl</CODE> variables get mapped to <CODE>C</CODE> variables and back again.
+
+<P>
+First, you need to know how <CODE>Perl</CODE> passes arguments back and forth to subroutines. Basically it uses a stack
+(also known as the <STRONG>Stack</STRONG>). When a sub is called, all of the parenthesized arguments get expanded
+into a list of scalars and pushed onto the <STRONG>Stack</STRONG>. The subroutine then pops all of its parameters off of the <STRONG>Stack</STRONG>. When the sub is done, it pushes all of its return values back onto the <STRONG>Stack</STRONG>. 
+
+<P>
+The <STRONG>Stack</STRONG> is an array of scalars known internally as <CODE>SV</CODE>'s. The <STRONG>Stack</STRONG> is actually an array of <STRONG>pointers to SV</STRONG> or <CODE>SV*</CODE>; therefore every element of the <STRONG>Stack</STRONG> is natively a <CODE>SV*</CODE>. For <EM>FMTYEWTK</EM> about this, read <EM>perlguts</EM>. 
+
+<P>
+So back to variable mapping. XS uses a thing known as ``typemaps'' to turn
+each <CODE>SV*</CODE> into a <CODE>C</CODE> type and back again. This is done through various XS macro calls, casts and
+the Perl API. See <EM>perlapi</EM>. XS allows you to define your own typemaps as well for fancier
+non-standard types such as <CODE>typedef</CODE>-ed structs.
+
+<P>
+<CODE>Inline</CODE> uses a boiled down version of this approach. It parses your code for simple
+types and generates the XS code to map them. The currently supported types
+are:
+
+<P>
+<PRE> - int
+ - long
+ - double
+ - char*
+ - void
+ - SV*
+</PRE>
+<P>
+If you need to deal with anything fancier, just use the generic <CODE>SV*</CODE> type in the function definition. Then inside your code, do the mapping
+yourself.
+
+<P>
+A return type of <CODE>void</CODE> has a special meaning to <CODE>Inline</CODE>. It means that you plan to push the values back onto the <STRONG>Stack</STRONG> yourself. This is what you need to do to return a list of values. If you
+really don't want to return anything (the traditional meaning of <CODE>void</CODE>) then simply don't push anything back.
+
+<P>
+If ellipsis or <CODE>...</CODE> is used at the end of an argument list, it means that any number of <CODE>SV*</CODE>s may follow. Again you will need to pop the values off of the <CODE>Stack</CODE> yourself.
+
+<P>
+See <A HREF="#Examples_In_C">Examples In C</A> below.
+
+<P>
+<HR>
+<H2><A NAME="Writing_C_Subroutines">Writing C Subroutines</A></H2>
+<P>
+The definitions of your C functions will fall into one of the following
+four categories. For each category there are special considerations.
+
+<OL>
+<LI>
+<P>
+<PRE>    int Foo(int arg1, char* arg2, SV* arg3) {
+</PRE>
+<P>
+This is the simplest case. You have a non <CODE>void</CODE> return type and a fixed length argument list. You don't need to worry about
+much. All the conversions will happen automatically.
+
+<LI>
+<P>
+<PRE>    void Foo(int arg1, char* arg2, SV* arg3) {
+</PRE>
+<P>
+In this category you have a <CODE>void</CODE> return type. This means that either you want to return nothing, or that you
+want to return a list. In the latter case you'll need to push values onto
+the <STRONG>Stack</STRONG> yourself. There are a couple of XS macros that make this easy. Code
+something like this:
+
+<P>
+<PRE>    int i, max; SV* my_sv[10];
+    dXSARGS;
+    sp = mark;
+    for (i = 0; i &lt; max; i++)
+      XPUSHs(my_sv[i]);
+    PUTBACK;
+</PRE>
+<P>
+The <CODE>dXSARGS</CODE> macro defines <CODE>sp</CODE> (stack pointer) and <CODE>mark</CODE> (stack base). You'll need to reset <CODE>sp</CODE> to <CODE>mark</CODE> yourself. Next use a series of <CODE>XPUSHs</CODE> calls to add values to the <STRONG>Stack</STRONG>. <CODE>sp</CODE> will get incremented with each call. Finally, the <CODE>PUTBACK</CODE> macro stores off the final value of <CODE>sp</CODE> so that your values will all get returned. See <EM>perlapi</EM> for more info.
+
+<P>
+If you really want to return nothing, then don't use <CODE>dXSARGS</CODE>. If you must use <CODE>dXSARGS</CODE>, then set <CODE>sp = mark;</CODE> and use <CODE>PUTBACK;</CODE> as well.
+
+<LI>
+<P>
+<PRE>    char* Foo(SV* arg1, ...) {
+</PRE>
+<P>
+In this category you have an unfixed number of arguments. This means that
+you'll have to pop values off the <STRONG>Stack</STRONG> yourself. Do it like this:
+
+<P>
+<PRE>    int i;
+    dSXSARGS;
+    for (i = 0; i &lt; items; i++)
+      handle_sv(ST(i));
+</PRE>
+<P>
+<CODE>dXSARGS</CODE> also defines an integer <CODE>items</CODE>, which contains the number of arguments on the <STRONG>Stack</STRONG>. The macro <CODE>ST(i)</CODE> returns the <STRONG>Stack</STRONG> argument <CODE>i</CODE> where <CODE>i = 0</CODE> is the first argument. The return type of <CODE>ST(i)</CODE> is <CODE>SV*</CODE>.
+
+<LI>
+<P>
+<PRE>    void* Foo(SV* arg1, ...) {
+</PRE>
+<P>
+In this category you have both a <CODE>void</CODE> return type and an unfixed number of arguments. Just combine the techniques
+from Categories 3 and 4.
+
+</OL>
+<P>
+<HR>
+<H2><A NAME="Configuration">Configuration</A></H2>
+<P>
+<CODE>Inline</CODE> trys to do the right thing as often as possible. But sometimes you may need
+to override the default actions. This is where <CODE>Inline::Config</CODE> comes to the rescue. <CODE>Inline::Config</CODE> gives you a more fine-grained control over the entire process. The other
+side of that coin is ``you need to know what you are doing''. 
+
+<P>
+An important point to remember is that the config settings must be done <EM>before</EM> the ``<CODE>use Inline</CODE>'' statement. Since a ``<CODE>use</CODE>'' happens at (<CODE>Perl</CODE>'s) compile time, you need to something like this:
+
+<P>
+<PRE>    BEGIN {
+        use Inline;
+        $Inline::Config::OPTION_NUMBER_9 = 'Yes';
+    # or
+        Inline::Config-&gt;new-&gt;option_number_9('Yes');
+    # depending on your orientation :-)
+    }
+    
+    use Inline C =&gt; &quot;C code goes here...&quot;;
+</PRE>
+<P>
+See <A HREF="/Inline/Config.html">Inline::Config</A> for more info.
+
+<P>
+<HR>
+<H2><A NAME="Configuration_from_the_Command_L">Configuration from the Command Line</A></H2>
+<P>
+<CODE>Inline</CODE> lets you set many of the configuration options from the command line. This
+can be very handy, especially when you only want to set the options
+temporarily, for say, debugging. 
+
+<P>
+For instance, to get some general information about your <CODE>Inline</CODE> code in the script <CODE>Foo.pl</CODE>, use the command:
+
+<P>
+<PRE>    perl -MInline=INFO Foo.pl
+</PRE>
+<P>
+If you want to force your code to compile, even if its already done, use:
+
+<P>
+<PRE>    perl -MInline=FORCE Foo.pl
+</PRE>
+<P>
+If you want to do both, use:
+
+<P>
+<PRE>    perl -MInline=INFO -MInline=FORCE Foo.pl
+</PRE>
+<P>
+or better yet:
+
+<P>
+<PRE>    perl -MInline=INFO,FORCE Foo.pl
+</PRE>
+<P>
+See <A HREF="/Inline/Config.html">Inline::Config</A> for more info.
+
+<P>
+<HR>
+<H2><A NAME="Writing_Modules_with_Inline">Writing Modules with Inline</A></H2>
+<P>
+If you are writing a module to distribute on the CPAN, (say <CODE>Foo.pm</CODE>) and you want it to include Inlined code, then you should add the
+following line to the top of your <CODE>test.pl</CODE> file before the ``<CODE>use Foo;</CODE>'' line:
+
+<P>
+<PRE> BEGIN {use Inline SITE_INSTALL;}
+</PRE>
+<P>
+When the installer does a ``<CODE>make test</CODE>'', the <CODE>Inline</CODE> module will compile <CODE>Foo</CODE>'s Inlined code and attempt to install the executable code into the <CODE>./blib</CODE> directory. Then when a ``<CODE>make install</CODE>'' is done, the module will be copied into Perl's <CODE>$Config{installsitearch}</CODE> directory (which is where an installed module should go).
+
+<P>
+<HR>
+<H2><A NAME="Fancy_Tricks">Fancy Tricks</A></H2>
+<P>
+The <CODE>Inline</CODE> module opens up all sorts of possibilities regarding what you can do with <CODE>Perl</CODE> and <CODE>C</CODE>. Since everything happens at run time (depending on how you think of it)
+you can generate <CODE>C</CODE> code on the fly and effectively '<CODE>eval</CODE>' it. (How this might be useful is left as an exercise to the reader :-) 
+
+<P>
+Here is how you would code such a beast:
+
+<P>
+<PRE>    BEGIN {$c_code = &amp;c_code_generator()}
+    use Inline C =&gt; $c_code;  # will die if code doesn't compile
+    myfunc1();
+</PRE>
+<P>
+or
+
+<P>
+<PRE>    $c_code = &amp;c_code_generator();
+    eval {use Inline C =&gt; $c_code};
+    if ($@) {
+        handle_error($@);     # trap error if code doesn't compile
+    }
+    else {
+        myfunc1();
+    }
+</PRE>
+<P>
+<HR>
+<H1><A NAME="Examples_In_C">Examples In C</A></H1>
+<P>
+Here is a series of examples. Each one is a complete program that you can
+try running yourself. In fact, each example is stored in the <CODE>examples/</CODE> subdirectory of the <CODE>Inline.pm</CODE> distribution. They will start out simple and build in complexity.
+
+<P>
+<HR>
+<H2><A NAME="Example_1_Greetings">Example #1 - Greetings</A></H2>
+<P>
+This example will take one string argument (a name) and print a greeting.
+The function is called with a string and with a number. In the second case
+the number is forced to a string.
+
+<P>
+Notice that you do not need to <CODE>#include &lt;stdio.h</CODE>&gt;. The <CODE>perl.h</CODE> header file which gets included by default, automatically loads the
+standard C header files for you.
+
+<P>
+<PRE>    greet('Ingy');
+    greet(42);
+ 
+    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+ 
+    void greet(char* name) {
+      printf(&quot;Hello %s!\n&quot;, name);
+    }
+ 
+    END_OF_C_CODE
+ 
+    __END__
+</PRE>
+<P>
+<HR>
+<H2><A NAME="Example_2_and_Salutations">Example #2 - and Salutations</A></H2>
+<P>
+This is similar to the last example except that the name is passed in as a <CODE>SV*</CODE> (pointer to Scalar Value) rather than a string (<CODE>char*</CODE>). That means we need to convert the <CODE>SV</CODE> to a string ourselves. This is accomplished using the <CODE>SvPVX</CODE> function which is part of the <CODE>Perl</CODE> internal API. See <EM>perlapi</EM> for more info.
+
+<P>
+One problem is that <CODE>SvPVX</CODE> doesn't automatically convert strings to numbers, so we get a little
+surprise when we try to greet <CODE>42</CODE>.
+
+<P>
+<PRE>    greet('Ingy');
+    greet(42);
+ 
+    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+ 
+    void greet(SV* sv_name) {
+      printf(&quot;Hello %s!\n&quot;, SvPVX(sv_name));
+    }
+ 
+    END_OF_C_CODE
+ 
+    __END__
+</PRE>
+<P>
+<HR>
+<H2><A NAME="Example_3_Fixing_the_problem">Example #3 - Fixing the problem</A></H2>
+<P>
+We can fix the problem in Example #2 by using the <CODE>SvPV</CODE> function instead. This function will stringify the <CODE>SV</CODE> if it does not contain a string. <CODE>SvPV</CODE> returns the length of the string as it's second parameter. Since we don't
+care about the length, we can just put <CODE>PL_na</CODE> there, which is a special variable designed for that purpose.
+
+<P>
+<PRE>    greet('Ingy');
+    greet(42);
+ 
+    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+ 
+    void greet(SV* sv_name) {
+      printf(&quot;Hello %s!\n&quot;, SvPV(sv_name, PL_na));
+    }
+ 
+    END_OF_C_CODE
+ 
+    __END__
+</PRE>
+<P>
+<HR>
+<H2><A NAME="Example_4_Return_to_Sender">Example #4 - Return to Sender</A></H2>
+<P>
+In this example we will return the greeting to the caller, rather than
+printing it. This would seem mighty easy, except for the fact that we need
+to allocate a small buffer to create the greeting.
+
+<P>
+I would urge you to stay away from <CODE>malloc</CODE>ing your own buffer. Just use Perl's built in memory management. In other
+words, just create a new Perl string scalar. The function <CODE>newSVpv</CODE> does just that. And <CODE>newSVpvf</CODE> includes <CODE>sprintf</CODE> functionality.
+
+<P>
+The other problem is getting rid of this new scalar. How will the ref count
+get decremented after we pass the scalar back? Perl also provides a
+function called <CODE>sv_2mortal</CODE>. Mortal variables die when the context goes out of scope. In other words,
+Perl will wait until the new scalar gets passed back and then decrement the
+ref count for you, thereby making it eligible for garbage collection. See <EM>perlguts</EM>.
+
+<P>
+In this example the <CODE>sv_2mortal</CODE> call gets done under the hood by XS, because we declared the return type to
+be <CODE>SV*</CODE>. Later, in Example #6, when we manage the return stack by hand, we'll need
+to call it ourselves. 
+
+<P>
+To view the generated XS code, run the command ``<CODE>perl -MInline=INFO,FORCE,NOCLEAN example004.pl</CODE>''. This will leave the build directory intact and tell you where to find
+it.
+
+<P>
+If all that sounds difficult, its not. Take a look:
+
+<P>
+<PRE>    print greet('Ingy');
+    print greet(42);
+ 
+    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+ 
+    SV* greet(SV* sv_name) {
+      return (newSVpvf(&quot;Hello %s!\n&quot;, SvPV(sv_name, PL_na)));
+    }
+ 
+    END_OF_C_CODE
+ 
+    __END__
+</PRE>
+<P>
+<HR>
+<H2><A NAME="Example_5_The_Welcome_Wagon">Example #5 - The Welcome Wagon</A></H2>
+<P>
+Let's modify the greet function to handle a group of people, or more
+exactly, a list of names. We use the <CODE>C</CODE> ellipsis syntax: ``<CODE>...</CODE>'', since the list can be of any size.
+
+<P>
+Since there are no types or names associated with each argument, we can't
+expect XS to handle the conversions for us. We'll need to pop them off the <STRONG>Stack</STRONG> ourselves. Luckily there are two functions (macros) that make this a very
+easy task.
+
+<P>
+First, we need to begin our function with a ``<CODE>dXSARGS;</CODE>'' statement. This defines a few variables that we need to access the <STRONG>Stack</STRONG>. The variable we need in this example is ``<CODE>items</CODE>'', which is an integer containing the number of arguments passed to us. 
+
+<P>
+<STRONG>NOTE:</STRONG> It is important to <EM>only</EM> use ``<CODE>dXSARGS;</CODE>'' when there is an ellipsis (<CODE>...</CODE>) in the argument list, <EM>or</EM> the function has a return type of void (See Example #6).
+
+<P>
+Second, we use the <CODE>ST(x)</CODE> function to access each argument where ``0 &lt;= x &lt; items''. Observe:
+
+<P>
+<PRE>    greet(qw(Brian Ingerson Ingy Me Myself I));
+ 
+    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+ 
+    void greet(SV* name1, ...) {
+      dXSARGS;
+      int i;
+ 
+      for (i = 0; i &lt; items; i++) 
+        printf(&quot;Hello %s!\n&quot;, SvPV(ST(i), PL_na));
+    }
+ 
+    END_OF_C_CODE
+ 
+    __END__
+</PRE>
+<P>
+<STRONG>NOTE:</STRONG> When using a variable length argument list, you have to specify at least
+one argument before the ellipsis. (On my compiler, anyway.) When XS does
+it's argument checking, it will complain if you pass in less than the
+number of <EM>defined</EM> arguments. Therefore, there is currently no way to pass an empty list when
+a variable length list is expected.
+
+<P>
+<HR>
+<H2><A NAME="Example_6_Stop_Repeating_Your">Example #6 - Stop Repeating Yourself</A></H2>
+<P>
+In this contrived example, we'll pass in the name to greet, and the number
+of times to do it. The <CODE>greet();</CODE> function will return that number of greetings. The purpose is to
+demonstrate how to pass back a list of values.
+
+<P>
+The first thing to do is set the function return type to void. This has a
+special meaning to <CODE>Inline</CODE> (and XS). It means that you're going to handle the return stack yourself.
+
+<P>
+Now we first call ``<CODE>dXSARGS</CODE>'' again. This time, we are interested in the variables <CODE>sp</CODE> and <CODE>mark</CODE>, which <CODE>dXSARGS</CODE> will create. <CODE>sp</CODE> is the stack pointer and <CODE>mark</CODE> is the beginning of the stack. Upon entry, sp will not be pointing at the
+beginning, so we use ``<CODE>sp = mark</CODE>'' to reset it.
+
+<P>
+The <CODE>XPUSHs</CODE> function does a lot for us. It pushes an <CODE>SV</CODE> onto the <STRONG>Stack</STRONG>, and updates the value of <CODE>sp</CODE>. It also will extend the size of the <STRONG>Stack</STRONG>, if it needs to, thus avoiding segfaults. 
+
+<P>
+Finally, <CODE>PUTBACK</CODE> stashes the new value of <CODE>sp</CODE> back to where it belongs. Don't forget it or your function won't work
+right. You'll get a return list equal in size to your input list, which in
+this case is 2.
+
+<P>
+<PRE>    print greet('Ingy', 42);
+ 
+    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+ 
+    void greet(char* name, int number) {
+      dXSARGS;
+      int i;
+ 
+      sp = mark;
+ 
+      for (i = 0; i &lt; number; i++)
+        XPUSHs(sv_2mortal(newSVpvf(&quot;Hello %s!\n&quot;, name))); 
+ 
+      PUTBACK;
+    }
+ 
+    END_OF_C_CODE
+ 
+    __END__
+</PRE>
+<P>
+Also notice that we used the <CODE>sv_2mortal</CODE> call that was discussed earlier. This will make sure that your newborn
+scalars get DESTROYed at the appointed time.
+
+<P>
+<HR>
+<H2><A NAME="Example_7_The_Ugly">Example #7 - The Ugly</A></H2>
+<P>
+The world is not made of scalars alone, although they are definitely the
+easiest creatures to deal with, when doing this kind of stuff. Sometimes we
+need to deal with arrays, hashes, and code references, among other things.
+
+<P>
+Since Perl subroutine calls only pass scalars as arguments, we'll need to
+use the argument type <CODE>SV*</CODE> and pass references to more complex types.
+
+<P>
+Lets look a program that dumps the key/value pairs of a hash:
+
+<P>
+<PRE>    use Inline C =&gt; &lt;&lt;'END_OF_C_CODE';
+ 
+    void dump_hash(SV* hash_ref) {
+      HV* hash;
+      HE* hash_entry;
+      int num_keys, i;
+      SV* sv_key;
+      SV* sv_val;
+ 
+      if (! SvROK(hash_ref))
+        croak(&quot;hash_ref is not a reference&quot;);
+ 
+      hash = (HV*)SvRV(hash_ref);
+      num_keys = hv_iterinit(hash);
+      for (i = 0; i &lt; num_keys; i++) {
+        hash_entry = hv_iternext(hash);
+        sv_key = hv_iterkeysv(hash_entry);
+        sv_val = hv_iterval(hash, hash_entry);
+        printf(&quot;%s =&gt; %s\n&quot;, SvPV(sv_key, PL_na), SvPV(sv_val, PL_na));
+      }
+      return;
+    }
+ 
+    END_OF_C_CODE
+ 
+    my %hash = (
+                Author =&gt; &quot;Brian Ingerson&quot;,
+                Nickname =&gt; &quot;INGY&quot;,
+                Module =&gt; &quot;Inline.pm&quot;,
+                Version =&gt; &quot;0.18&quot;,
+                Example =&gt; 7,
+               );
+ 
+    dump_hash(\%hash);
+ 
+    __END__
+</PRE>
+<P>
+To figure out this one, just curl up with <EM>perlapi</EM> for a couple hours. Actually, its fairly straight forward once you are
+familiar with the calls. 
+
+<P>
+Note the <CODE>croak</CODE> function call. This is the proper way to die from your <CODE>C</CODE> extensions.
+
+<P>
+<HR>
+<H1><A NAME="SUPPORTED_LANGUAGES">SUPPORTED LANGUAGES</A></H1>
+<P>
+Currently, ``<CODE>C</CODE>'' is the only supported language. This is obviously the most important
+language to support. That is because <CODE>Perl</CODE> itself is written in <CODE>C</CODE>. By giving a your <CODE>Perl</CODE> scripts access to <CODE>C</CODE>, you in effect give them access to the entire glorious internals of <CODE>Perl</CODE>. (Caveat scriptor :-)
+
+<P>
+<CODE>C</CODE> is also the easiest language to implement because the tools needed to do
+so, (like XS and <CODE>ExtUtils::MakeMaker</CODE>) have already been written and are very flexible and reliable. <CODE>Inline</CODE> makes use of these pre-existing tools.
+
+<P>
+But there is definitely no reason why <CODE>Inline</CODE> must or should stop with <CODE>C</CODE>. As long as sensible bindings can be defined between Perl and another
+language, that language could be a candidate for the <CODE>Inline</CODE> module. Current languages I am considering adding support for include:
+
+<P>
+<PRE> - C++
+ - Fortran
+ - Pascal
+ - Python
+</PRE>
+<P>
+<STRONG>Note:</STRONG> Since many <CODE>C</CODE> compilers allow the use of assembly code within C, you may want to consider
+Assembly Language as supported. Ready to start scripting out new device
+drivers?
+
+<P>
+<HR>
+<H1><A NAME="SUPPORTED_PLATFORMS">SUPPORTED PLATFORMS</A></H1>
+<P>
+This module should work anywhere that CPAN extension modules (those that
+use XS) can be installed, using the typical install format of:
+
+<P>
+<PRE>    perl Makefile.PL
+    make
+    make test
+    make install
+</PRE>
+<P>
+Inline has been tested on the following platforms:
+
+<P>
+<PRE> V#   OS      OS V#   Perl V# Human              Email 
+ 0.22 Linux   2.2.13  5.00503 Brian Ingerson     ingy@cpan.org
+ 0.22 Linux   2.2.13  5.6     Brian Ingerson     ingy@cpan.org
+ 0.20 FreeBSD 3.4     5.00503 Timothy A Gregory  tgregory@tarjema.com      
+ 0.20 FreeBSD 4.0     5.00503 Timothy A Gregory  tgregory@tarjema.com      
+ 0.20 FreeBSD 4.0     5.6     Timothy A Gregory  tgregory@tarjema.com      
+ 0.20 Linux   2.0.36  5.00503 Prakasa Bellam     pbellam@cobaltgroup.com
+ 0.20 HPUX    B.10.20 5.00503 Jamie Shaffer      jshaffer@chronology.com
+ 0.20 SunOS   5.6     5.6.0   Jamie Shaffer      jshaffer@chronology.com
+ 0.20 SunOS   5.5.1   5.6.0   Jamie Shaffer      jshaffer@chronology.com
+ 0.22 OpenBSD 2.7     5.6.0   Jeremy Devenport   jeremy@weezel.com
+ 0.22 FreeBSD 3.1     5.00503 Doug Beaver        dougb@scalar.org
+</PRE>
+<P>
+If <CODE>Inline</CODE> works on your Unix platform, please email me the info above. If it doesn't
+work, see <A HREF="#BUGS_AND_DEFICIENCIES">BUGS AND DEFICIENCIES</A> below.
+
+<P>
+I would like to port this to Win32 as soon as possible, but that's a big
+step for me. Any takers?
+
+<P>
+<HR>
+<H1><A NAME="BUGS_AND_DEFICIENCIES">BUGS AND DEFICIENCIES</A></H1>
+<P>
+This is an early release of a fairly ambitious module. It is definitely <STRONG>ALPHA</STRONG> code. The bugs should be bountiful!
+
+<P>
+When reporting a bug, please do the following:
+
+<P>
+<PRE> - Put &quot;use Inline REPORTBUG;&quot; at the top of your code, or
+   use the command line option &quot;perl -MInline=REPORTBUG ...&quot;.
+ - Run your code.
+ - Follow the printed directions.
+</PRE>
+<P>
+Here are some things to watch out for:
+
+<OL>
+<LI>
+<P>
+The <CODE>Parse::RecDescent</CODE> grammar for <CODE>C</CODE> is fledgling. For example, it won't catch invalid type errors in your
+function definitions. It will just ignore those definitions altogether.
+It'll get better. For now be careful and examine the generated code when
+things don't work. Also, using ``<CODE>perl -MInline=INFO ...</CODE>'' will show you which function definitions <EM>did</EM> work.
+
+<LI>
+<P>
+<CODE>Inline</CODE> doesn't currently handle output parameters (like XS does). I'm not sure
+whether to add them or not. They're not very Perl-like IMO.
+
+<LI>
+<P>
+While <CODE>Inline</CODE> does attempt to clean up after itself, there is currently no functionality
+to remove a shared object when a new version is compiled. This shouldn't be
+hard to do, but I want to think about it a little more. 
+
+</OL>
+<P>
+<HR>
+<H1><A NAME="AUTHOR">AUTHOR</A></H1>
+<P>
+Brian Ingerson &lt;<A HREF="mailto:INGY@cpan.org">INGY@cpan.org</A>&gt;
+
+<P>
+<HR>
+<H1><A NAME="COPYRIGHT">COPYRIGHT</A></H1>
+<P>
+Copyright (c) 2000, Brian Ingerson. All Rights Reserved. This module is
+free software. It may be used, redistributed and/or modified under the
+terms of the Perl Artistic License (see <A
+HREF="http://www.perl.com/perl/misc/Artistic.html)">http://www.perl.com/perl/misc/Artistic.html)</A>
+
+
+</BODY>
+
+</HTML>
