@@ -8,5 +8,3 @@ SV* greet(SV* sv_name) {
 }
 
 END_OF_C_CODE
-
-__END__

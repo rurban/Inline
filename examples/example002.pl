@@ -1,6 +1,6 @@
 # NOTE: This example may segfault. At the very least it will produce something
 # unexpected. This is the intention. "example003.pl" fixes the problem.
-
+#
 greet('Ingy');
 greet(42);
 
@@ -11,5 +11,3 @@ void greet(SV* sv_name) {
 }
 
 END_OF_C_CODE
-
-__END__

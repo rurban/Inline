@@ -1,0 +1,11 @@
+# Make pod link together correctly.
+# Update doc for new Inline_Stack_???? macros.
+# Finish C tutorial
+
+# Add tests to harness
+
+# Add type modifiers to the C grammar.
+# Allow a typemapping mechanism that extends the grammar.
+# Replace XS generation w/ C generation.
+  # May require release specific code.
+# Work out a method to clean old shared objects out of 'site_perl' when new versions are installed. Should prolly be invoked by "make install".

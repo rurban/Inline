@@ -3,10 +3,10 @@ package Inline;
 require 5.005;                # Parse::RecDescent requires this.
 use strict;
 use vars qw($VERSION @ISA);
-require AutoLoader;
+use AutoLoader 'AUTOLOAD';
 require DynaLoader;
 @ISA = qw(DynaLoader AutoLoader);
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use Inline::Config;
 use Config;
@@ -21,7 +21,6 @@ my %supported_languages = (C => 1);
 # "use Inline" will invoke the import sub automatically.
 #==============================================================================
 sub import {
-#    $^W = 1;             # for testing only;
     my $o = bless {
 		   version => $Inline::VERSION,
 		  }, shift;
@@ -35,8 +34,7 @@ sub import {
 	$o->set_options(@_);
 	return;
     }
-    my $code = shift;
-    $o->receive_code($code);
+    $o->receive_code(@_);
 
     $o->check_module;
     $o->reportbug if $Inline::Config::REPORTBUG;
@@ -44,10 +42,12 @@ sub import {
 
     if (not $o->{mod_exists} or
 	$Inline::Config::FORCE_BUILD or
+	$Inline::Config::SITE_INSTALL or
 	$Inline::Config::REPORTBUG
        ) {
-	$o->parse_C unless $o->{parser};
+	$o->parse_C;
 	$o->write_XS;
+	$o->write_Inline_headers;
 	$o->write_Makefile_PL;
 	$o->compile;
     }
@@ -67,11 +67,11 @@ sub DESTROY {
 # Set special options from the command line
 #==============================================================================
 my %valid_options = (
-		     CLEAN => [CLEAN_BUILD_AREA => 1],
-		     FORCE => [FORCE_BUILD => 1],
-		     INFO => [PRINT_INFO => 1],
-		     NOCLEAN => [CLEAN_AFTER_BUILD => 0],
-		     REPORTBUG => [REPORTBUG => 1],
+		     CLEAN =>        [CLEAN_BUILD_AREA => 1],
+		     FORCE =>        [FORCE_BUILD => 1],
+		     INFO =>         [PRINT_INFO => 1],
+		     NOCLEAN =>      [CLEAN_AFTER_BUILD => 0],
+		     REPORTBUG =>    [REPORTBUG => 1],
 		     SITE_INSTALL => [SITE_INSTALL => 1],
 		    );
 
@@ -95,17 +95,15 @@ sub set_options {
 # Receive the source code from the caller
 #==============================================================================
 sub receive_code {
-    my ($o, $code) = @_;
+    my $o = shift;
+    my ($code) = join '', @_;
     
     croak "No code supplied to Inline"
       unless (defined $code and $code);
 
-    if (ref $code eq 'CODE') {
-	$o->{code} = &$code;
-    } 
-#    elsif (ref $code eq 'GLOB') { # Want to support open FH
-#	$o->{code} = join '', <$code>;
-#    } 
+    if (ref $_[0] eq 'CODE') {
+	$o->{code} = &{$_[0]};
+    }
     elsif ($code =~ m|[/\\]| and
 	   $code =~ m|^[\w/.-]+$|) {
 	if (-f $code) {
@@ -127,53 +125,74 @@ sub receive_code {
 # Check to see if code has already been compiled
 #==============================================================================
 sub check_module {
+    my ($pkg, $id);
     my $o = shift;
 
-    my ($pkg, $script) = @{$o}{qw(pkg script)};
-    $script =~ s|^.*/(.*)$|$1|g;
-    $script =~ s/\W/_/g;
-    $o->{auto_include} = $Inline::Config::AUTO_INCLUDE_C;
+    $pkg = $o->{pkg};
+    if ($pkg eq 'main') {
+	$id = $o->{script};
+	$id =~ s|^.*/(.*)$|$1|g;
+	$id =~ s|\W|_|g;
+	$id .= '_';
+    }
+    else {
+	no strict 'refs';
+	$id = $ {$pkg . '::VERSION'} || '';
+	use strict 'refs';
+	$id = '' unless $id =~ m|^\d\.\d\d$|;
+	$id =~ s|\.|_|;
+	croak "Inline.pm Error. \$VERSION is missing or invalid for module $pkg\n"
+	  if ($Inline::Config::SITE_INSTALL and not $id);
+	$id .= '_' if $id;
+    }
 
-    $o->{module} = "${pkg}_$o->{language}_" . 
-      ($pkg eq 'main' ? "${script}_" : '') .
-	md5_hex($o->{auto_include},
-		$o->{code});
+    $o->{module} = "${pkg}_$o->{language}_$id" . md5_hex($o->{code});
 
     my @modparts = split(/::/,$o->{module});
     $o->{modfname} = $modparts[-1];
     $o->{modpname} = join('/',@modparts);
     $o->{so} = $Config::Config{so};
-
-    $o->{build_dir} = 
-      Inline::Config::_get_build_prefix() . $o->{modpname} . '/';
-
     $o->{mod_exists} = 0;
+
     if ($Inline::Config::SITE_INSTALL) {
-	my $blib = Cwd::abs_path('./blib');
+	my $cwd = Cwd::cwd();
+	my $blib = "$cwd/blib";
+	my $blib_I = "$cwd/blib_I/";
 	croak "Invalid attempt to do SITE_INSTALL\n"
 	  unless (-d $blib and -w $blib);
+	if (not -d $blib_I) {
+	    mkdir($blib_I, 0777)
+	      or croak "Can't mkdir $blib_I to build Inline code.\n";
+	}
+	$o->{build_dir} = $blib_I;
+	$o->{install_lib} = "$blib/arch/";
 	$o->{location} = 
 	  "$blib/arch/auto/$o->{modpname}/$o->{modfname}.$o->{so}";
-	$o->{install_lib} = "$blib/arch/";
 	return;
     }
 
     $o->{location} =
       "$Config::Config{installsitearch}/auto/$o->{modpname}/$o->{modfname}.$o->{so}";
-    $o->{install_lib} = Inline::Config::_get_install_lib();
     if (-f $o->{location}) {
 	$o->{mod_exists} = 1;
 	if ($Inline::Config::FORCE_BUILD or
 	    $Inline::Config::REPORTBUG) {
+	    $o->{build_dir} = 
+	      Inline::Config::_get_build_prefix() . $o->{modpname} . '/';
+	    $o->{install_lib} = Inline::Config::_get_install_lib();
 	    unshift @::INC, $o->{install_lib};
 	    $o->{location} =
 	      "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{so}"; 
 	}
     }
     else {
+	$o->{build_dir} = 
+	  Inline::Config::_get_build_prefix() . $o->{modpname} . '/';
+	$o->{install_lib} = Inline::Config::_get_install_lib();
 	unshift @::INC, $o->{install_lib};
 	$o->{location} = 
 	  "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{so}"; 
+
 	if (-f $o->{location}) {
 	    $o->{mod_exists} = 1;
 	}
@@ -198,52 +217,6 @@ sub dynaload {
 END
 }
 
-#==============================================================================
-# This routine fixes problems with the MakeMaker Makefile.
-# Yes, it is a kludge, but it is a necessary one.
-# 
-# ExtUtils::MakeMaker cannot be trusted. It has extremely flaky behaviour
-# between releases and platforms. I have been burned several times.
-#
-# Doing this actually cleans up other code that was trying to guess what
-# MM would do. This method will always work.
-# And, at least this only needs to happen at build time, when we are taking 
-# a performance hit anyway!
-#==============================================================================
-# Why can't this be autoloaded? :-(   (Breaks "make test")
-#==============================================================================
-sub fix_make {
-    use strict;
-    my %fixes = (
-		 INSTALLSITEARCH => 'install_lib',
-		 INSTALLDIRS => 'installdirs',
-		);
-	     
-    my (@lines, $fix);
-    my $o = shift;
-
-    $o->{installdirs} = 'site';
-    
-    open(MAKEFILE, "< $o->{build_dir}Makefile")
-      or croak "Can't open Makefile for input: $!\n";
-    @lines = <MAKEFILE>;
-    close MAKEFILE;
-
-    open(MAKEFILE, "> $o->{build_dir}Makefile")
-      or croak "Can't open Makefile for output: $!\n";
-    for (@lines) {
-	if (/^(\w+)\s*=\s*\S*\s*$/ and
-	    $fix = $fixes{$1}
-	   ) {
-	    print MAKEFILE "$1 = $o->{$fix}\n"
-	}
-	else {
-	    print MAKEFILE;
-	}
-    }
-    close MAKEFILE;
-}
-
 1;
 
 __END__
@@ -262,6 +235,7 @@ sub reportbug {
     my $o = shift;
     return if $o->{reportbug_handled}++;
     print STDERR <<END;
+<-----------------------REPORTBUG Section------------------------------------->
 
 REPORTBUG mode in effect.
 
@@ -282,14 +256,15 @@ with the subject line: "REPORTBUG: Inline.pm"
 Include in the email, a description of the problem and anything else that 
 you think might be helpful. Patches are welcome! :-\)
 
+<-----------------------End of REPORTBUG Section------------------------------>
 END
     my %versions;
     {
-	no strict refs;
+	no strict 'refs';
 	%versions = map {eval "use $_();"; ($_, $ {$_ . '::VERSION'})}
-	qw (Carp Config Data::Dumper Digest::MD5 
-	    ExtUtils::MakeMaker ExtUtils::MM_Unix
-	    File::Path FindBin Inline Inline::Config Parse::RecDescent
+	qw (Data::Dumper Digest::MD5 Parse::RecDescent 
+	    ExtUtils::MakeMaker File::Path FindBin 
+	    Inline Inline::Config
 	   );
     }
 
@@ -324,8 +299,9 @@ sub print_info {
     my $o = shift;
 
     print STDERR <<END;
-<----------------------------------------------------------------------------->
-    Information about the processing of your Inline $o->{language} code:
+<-----------------------Information Section----------------------------------->
+
+Information about the processing of your Inline $o->{language} code:
 
 END
     
@@ -362,8 +338,9 @@ END
 	    my $return_type = $data->{function}->{$function}->{return_type};
 	    my @arg_names = @{$data->{function}->{$function}->{arg_names}};
 	    my @arg_types = @{$data->{function}->{$function}->{arg_types}};
+	    my @args = map {$_ . ' ' . shift @arg_names} @arg_types;
 	    print STDERR ("\t$return_type $function(", 
-			  join(', ', @arg_names), ")\n");
+			  join(', ', @args), ")\n");
 	}
     }
     else {
@@ -373,38 +350,26 @@ END
     print STDERR <<END;
 
 <-----------------------End of Information Section---------------------------->
-
 END
 }
 
 #==============================================================================
 # Parse the function definition information out of the C code
 #==============================================================================
-sub parse_C {
-    use strict;
-    use Data::Dumper;
-    use Parse::RecDescent;
-
-    my $o = shift;
-    $::RD_HINT++;
-
-    %Inline::valid_types = map {($_, 1)}
-    qw(SV* long int double char* void);
-
-    my $C_grammar = <<'END_OF_GRAMMAR';
+my $C_grammar = <<'END_OF_GRAMMAR';
 
 c_code:	part(s) {1}
 
 part:	  comment
 	| function_definition
 	{
-	my $function = $item[1]->[0];
-	push @{$thisparser->{data}->{functions}}, $function;
-	$thisparser->{data}->{function}->{$function}->{return_type} = 
+	 my $function = $item[1]->[0];
+	 push @{$thisparser->{data}->{functions}}, $function;
+	 $thisparser->{data}->{function}->{$function}->{return_type} = 
              $item[1]->[1];
-	$thisparser->{data}->{function}->{$function}->{arg_types} = 
+	 $thisparser->{data}->{function}->{$function}->{arg_types} = 
              [map {ref $_ ? $_->[0] : '...'} @{$item[1]->[2]}];
-	$thisparser->{data}->{function}->{$function}->{arg_names} = 
+	 $thisparser->{data}->{function}->{$function}->{arg_names} = 
              [map {ref $_ ? $_->[1] : '...'} @{$item[1]->[2]}];
 	}
 	| anything_else
@@ -416,12 +381,10 @@ function_definition:
 	type IDENTIFIER '(' <leftop: arg ',' arg>(s?) ')' '{'
 	{[@item[2,1], $item[4]]}
 
-type:	('SV' | 'long' | 'double' | 'int' | 'char' | 'void') star(s?)
-	{$return = join '',$item[1],@{$item[2]};
-         unless ($Inline::valid_types{$return}) {
-#             print STDERR qq{Unsupported type "$return" used.\n\n};
-             $return = '';
-	 }
+type:	('SV' | 'int' | 'long' | 'double' | 'char' | 'void') star(s?)
+	{
+         $return = join '',$item[1],@{$item[2]};
+         $return = '' unless ($Inline::valid_types{$return});
 	}
 
 star: '*'
@@ -435,6 +398,18 @@ anything_else: /.*/
 
 END_OF_GRAMMAR
 
+sub parse_C {
+    use strict;
+    use Data::Dumper;
+    use Parse::RecDescent;
+
+    my $o = shift;
+    return if $o->{parser};
+
+    %Inline::valid_types = map {($_, 1)}
+    qw(SV* int long double char* void);
+
+    $::RD_HINT++;
     my $parser = $o->{parser} = Parse::RecDescent->new($C_grammar);
 
     $parser->c_code($o->{code})
@@ -449,6 +424,7 @@ sub write_XS {
     use strict;
     my $o = shift;
     my ($pkg, $module, $modfname) = @{$o}{qw(pkg module modfname)};
+    $o->{auto_include} = $Inline::Config::AUTO_INCLUDE_C;
 
     $o->mkpath($o->{build_dir});
     open XS, "> $o->{build_dir}/$modfname.xs"
@@ -479,8 +455,9 @@ END
 	}
 
 	my $listargs = '';
-	$listargs = pop @arg_names if $arg_names[-1] eq '...';
-	my $arg_name_list = join ', ', @arg_names;
+	$listargs = pop @arg_names if (@arg_names and 
+				       $arg_names[-1] eq '...');
+	my $arg_name_list = join(', ', @arg_names);
 
 	if ($return_type eq 'void') {
 	    print XS <<END;
@@ -489,8 +466,13 @@ END
 	PPCODE:
 	temp = PL_markstack_ptr++;
 	$function($arg_name_list);
-	PL_markstack_ptr = temp;
-	return;
+	if (PL_markstack_ptr != temp) {
+          /* truly void, because dXSARGS not invoked */
+	  PL_markstack_ptr = temp;
+	  XSRETURN_EMPTY; /* return empty stack */
+        }
+        /* must have used dXSARGS; list context implied */
+	return; /* assume stack size is correct */
 END
 	}
 	elsif ($listargs) {
@@ -511,6 +493,48 @@ END
 }
 
 #==============================================================================
+# Generate the INLINE.h file.
+#==============================================================================
+sub write_Inline_headers {
+    use strict;
+    my $o = shift;
+
+    open HEADER, "> $o->{build_dir}/INLINE.h"
+      or croak;
+
+    print HEADER <<'END';
+#define Inline_Stack_Vars	dXSARGS
+#define Inline_Stack_Items      items
+#define Inline_Stack_Item(x)	ST(x)
+#define Inline_Stack_Reset      sp = mark
+#define Inline_Stack_Push(x)	XPUSHs(x)
+#define Inline_Stack_Done	PUTBACK
+#define Inline_Stack_Return(x)	XSRETURN(x)
+#define Inline_Stack_Void       XSRETURN(0)
+
+#define INLINE_STACK_VARS	Inline_Stack_Vars
+#define INLINE_STACK_ITEMS	Inline_Stack_Items
+#define INLINE_STACK_ITEM(x)	Inline_Stack_Item(x)
+#define INLINE_STACK_RESET	Inline_Stack_Reset
+#define INLINE_STACK_PUSH(x)    Inline_Stack_Push(x)
+#define INLINE_STACK_DONE	Inline_Stack_Done
+#define INLINE_STACK_RETURN(x)	Inline_Stack_Return(x)
+#define INLINE_STACK_VOID	Inline_Stack_Void
+
+#define inline_stack_vars	Inline_Stack_Vars
+#define inline_stack_items	Inline_Stack_Items
+#define inline_stack_item(x)	Inline_Stack_Item(x)
+#define inline_stack_reset	Inline_Stack_Reset
+#define inline_stack_push(x)    Inline_Stack_Push(x)
+#define inline_stack_done	Inline_Stack_Done
+#define inline_stack_return(x)	Inline_Stack_Return(x)
+#define inline_stack_void	Inline_Stack_Void
+END
+
+    close HEADER;
+}
+
+#==============================================================================
 # Generate the Makefile.PL
 #==============================================================================
 sub write_Makefile_PL {
@@ -522,7 +546,6 @@ sub write_Makefile_PL {
 		   VERSION => '0.00',
 		   %Inline::Config::MAKEFILE,
 		   NAME => $o->{module},
-#		   PREFIX => Inline::Config::_get_install_prefix(),
 		  );
     
     open MF, "> $o->{build_dir}/Makefile.PL"
@@ -559,22 +582,22 @@ sub compile {
       or croak "Can't locate your perl binary";
     ($make = $Config::Config{make})
       or croak "Can't locate your make binary";
-    $cwd = cwd;
-    chdir $build_dir;
+    $cwd = &cwd;
     for $cmd ("$perl Makefile.PL > out.Makefile_PL 2>&1",
-		 \ 1,   # Fix Makefile problems
-		 "$make > out.make 2>&1",
-		 "$make install > out.make_install 2>&1",
-		) {
+	      \ &fix_make,   # Fix Makefile problems
+	      "$make > out.make 2>&1",
+	      "$make install > out.make_install 2>&1",
+	     ) {
 	if (ref $cmd) {
-	    $o->fix_make();
+	    $o->$cmd();
 	}
 	else {
+	    chdir $build_dir;
 	    system($cmd) and croak <<END;
 
 A problem was encountered while attempting to compile and install your Inline
 $o->{language} code. The command that failed was:
-# $cmd
+  $cmd
 
 The build directory was:
 $build_dir
@@ -582,9 +605,9 @@ $build_dir
 To debug the problem, cd to the build directory, and inspect the output files.
 
 END
+	    chdir $cwd;
 	}
     }
-    chdir $cwd;
 
     if ($Inline::Config::CLEAN_AFTER_BUILD and 
 	not $Inline::Config::REPORTBUG
@@ -592,9 +615,53 @@ END
 	$o->rmpath(Inline::Config::_get_build_prefix(), $modpname);
 	unlink "$install_lib/auto/$modpname/.packlist";
 	unlink "$install_lib/auto/$modpname/$modfname.bs";
-	unlink "$install_lib/auto/$modpname/$modfname.exp"; #MSWin32
-	unlink "$install_lib/auto/$modpname/$modfname.lib"; #MSWin32
+	unlink "$install_lib/auto/$modpname/$modfname.exp"; #MSWin32 VC++
+	unlink "$install_lib/auto/$modpname/$modfname.lib"; #MSWin32 VC++
     }
+}
+
+#==============================================================================
+# This routine fixes problems with the MakeMaker Makefile.
+# Yes, it is a kludge, but it is a necessary one.
+# 
+# ExtUtils::MakeMaker cannot be trusted. It has extremely flaky behaviour
+# between releases and platforms. I have been burned several times.
+#
+# Doing this actually cleans up other code that was trying to guess what
+# MM would do. This method will always work.
+# And, at least this only needs to happen at build time, when we are taking 
+# a performance hit anyway!
+#==============================================================================
+my %fixes = (
+	     INSTALLSITEARCH => 'install_lib',
+	     INSTALLDIRS => 'installdirs',
+	    );
+
+sub fix_make {
+    use strict;
+    my (@lines, $fix);
+    my $o = shift;
+
+    $o->{installdirs} = 'site';
+    
+    open(MAKEFILE, "< $o->{build_dir}Makefile")
+      or croak "Can't open Makefile for input: $!\n";
+    @lines = <MAKEFILE>;
+    close MAKEFILE;
+
+    open(MAKEFILE, "> $o->{build_dir}Makefile")
+      or croak "Can't open Makefile for output: $!\n";
+    for (@lines) {
+	if (/^(\w+)\s*=\s*\S*\s*$/ and
+	    $fix = $fixes{$1}
+	   ) {
+	    print MAKEFILE "$1 = $o->{$fix}\n"
+	}
+	else {
+	    print MAKEFILE;
+	}
+    }
+    close MAKEFILE;
 }
 
 #==============================================================================

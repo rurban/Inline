@@ -17,7 +17,7 @@ use vars qw($VERSION
 	    $AUTOLOAD
 	    $INSTALL_SUFFIX
 	   );
-$VERSION = '0.24';
+$VERSION = '0.25';
 
 use Config;
 use Carp;
@@ -33,6 +33,7 @@ $AUTO_INCLUDE_C = <<'END';
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+#include "INLINE.h"
 END
 
 $CLEAN_AFTER_BUILD = 1;
@@ -82,8 +83,7 @@ AUTOLOAD {
 #==============================================================================
 sub _get_build_prefix {
     if ($BUILD_PREFIX) {
-	$BUILD_PREFIX = abs_path($BUILD_PREFIX);
-	$BUILD_PREFIX .= '/' unless $BUILD_PREFIX =~ m|/$|;
+	$BUILD_PREFIX = abs_path($BUILD_PREFIX) . '/';
     }
     else {
 	$BUILD_PREFIX ||= _find_temp_dir();
@@ -93,8 +93,7 @@ sub _get_build_prefix {
 
 sub _get_install_prefix {
     if ($INSTALL_PREFIX) {
-	$INSTALL_PREFIX = abs_path($INSTALL_PREFIX);
-	$INSTALL_PREFIX .= '/' unless $INSTALL_PREFIX =~ m|/$|;
+	$INSTALL_PREFIX = abs_path($INSTALL_PREFIX) . '/';
     }
     else {
 	$INSTALL_PREFIX ||= _find_temp_dir();
@@ -103,7 +102,10 @@ sub _get_install_prefix {
 }
 
 sub _get_install_suffix {
-    return $INSTALL_SUFFIX if $INSTALL_SUFFIX;
+    return $INSTALL_SUFFIX if ($INSTALL_SUFFIX && 
+			       $INSTALL_SUFFIX =~ m|^/|
+			      );
+    # MSWin32 needs abs_path
     my $suffix = abs_path($Config::Config{sitearch});
     $suffix =~ s|^.*(/site.*)$|$1| 
       or croak <<'END';
@@ -114,75 +116,72 @@ END
 }
 
 sub _get_install_lib {
-    my $prefix = _get_install_prefix();
     return $INSTALL_LIB = $INSTALL_LIB ||
-      ($prefix . 
-       'lib/perl5' .
-       _get_install_suffix()
-      );
+      _get_install_prefix() . 'lib/perl5' . _get_install_suffix();
 }
 
-my $temp_dir_checked = 0;
+my $temp_dir_checked = '';
 sub _find_temp_dir {
     if ($TEMP_DIR) {
-	unless ($temp_dir_checked++) {
+	if ($temp_dir_checked ne $TEMP_DIR) {
 	    croak <<END unless (-d $TEMP_DIR and -w $TEMP_DIR);
 Invalid temporary directory specified: "$TEMP_DIR"
 Either non-existent or unwritable
 END
-	    $TEMP_DIR = abs_path($TEMP_DIR);
-	    $TEMP_DIR .= '/' unless $TEMP_DIR =~ m|/$|;
+	    $temp_dir_checked = $TEMP_DIR = abs_path($TEMP_DIR) . '/';
 	}
 	return $TEMP_DIR;
     }
+    
     my ($temp_dir, $home, $bin, $cwd, $env);
     $temp_dir = '';
-    $home = $ENV{HOME} || '';
-    $bin = $FindBin::Bin;
-    $cwd = abs_path('.');
     $env = $ENV{PERL_INLINE_BLIB} || '';
+    $home = $ENV{HOME} ? abs_path($ENV{HOME}) : '';
     
     if ($env and
 	-d $env and
 	-w $env) {
 	$temp_dir = $env;
     }
-    elsif ($home and
-	   -d "$home/.blib_I/" and
-	   -w "$home/.blib_I/") {
-	$temp_dir = "$home/.blib_I/";
+    elsif ($cwd = abs_path('.') and
+	   $cwd ne $home and
+	   -d "$cwd/blib_I/" and
+	   -w "$cwd/blib_I/") {
+	$temp_dir = "$cwd/blib_I/";
     }
+    elsif ($bin = $FindBin::Bin and
+	   -d "$bin/blib_I/" and
+	   -w "$bin/blib_I/") {
+	$temp_dir = "$bin/blib_I/";
+    } 
+    elsif (-d "/tmp/blib_I/" and
+	   -w "/tmp/blib_I/") {
+	$temp_dir = "/tmp/blib_I/";
+    } 
     elsif ($home and
 	   -d "$home/blib_I/" and
 	   -w "$home/blib_I/") {
 	$temp_dir = "$home/blib_I/";
     } 
-    elsif (-d "$bin/blib_I/" and
-	   -w "$bin/blib_I/") {
-	$temp_dir = "$bin/blib_I/";
-    } 
-    elsif (-d "$cwd/blib_I/" and
-	   -w "$cwd/blib_I/") {
-	$temp_dir = "$cwd/blib_I/";
+    elsif ($home and
+	   -d "$home/.blib_I/" and
+	   -w "$home/.blib_I/") {
+	$temp_dir = "$home/.blib_I/";
     }
-    elsif (-d "/tmp/blib_I/" and
-	   -w "/tmp/blib_I/") {
-	$temp_dir = "/tmp/blib_I/";
-    } 
-    elsif (-d "$bin/" and
-	   -w "$bin/" and
+    elsif (-d $bin and
+	   -w $bin and
 	   mkdir("$bin/blib_I/", 0777)) {
 	$temp_dir = "$bin/blib_I/";
     }
-    elsif (-d "$cwd/" and
-	   -w "$cwd/" and
+    elsif (-d $cwd and
+	   -w $cwd and
 	   mkdir("$cwd/blib_I/", 0777)) {
 	$temp_dir = "$cwd/blib_I/";
     }
 
     croak "Couldn't find an appropriate temporary directory to build in\n"
       unless $temp_dir;
-    return $TEMP_DIR = $temp_dir;
+    return $temp_dir_checked = $TEMP_DIR = abs_path($temp_dir) . '/';
 }
 
 1;

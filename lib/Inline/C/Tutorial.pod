@@ -1,0 +1,366 @@
+=head1 NAME
+
+B<Inline::C::Tutorial> - A Tutorial for extending Perl with C using Inline.pm
+
+=head1 DESCRIPTION
+
+This document intends to describe all of the parts of C<Inline> that are specific to the C programming language. Since C<Inline> will eventually support many programming languages, each language will have its own documentation page. For general information about C<Inline> please see the C<Inline> documentation.
+
+=head1 Function Definitions
+
+The C<Inline> grammar for C recognizes certain function definitions (or signatures) in your C code. If a signature is recognized by C<Inline>, then it will be available in Perl-space. That is, C<Inline> will generate the "glue" necessary to call that function as if it were a Perl subroutine. If the signature is not recognized, C<Inline> will simply ignore it, with no complaints. It will not be available from Perl-space, although it I<will> be available from C-space.
+
+C<Inline> looks for ANSI/prototype style function definitions. They must be of the form:
+
+    return-type function-name ( type-name-pairs ) { ... }
+
+They also may only use the types: C<int>, C<long>, C<double>, C<char*>, and C<SV*>. A return type of C<void> may also be used. The following are examples of valid function definitions.
+
+    int Foo(double num, char* str) {
+    void Foo(double num, char* str) {
+    SV* Foo() {
+    void Foo(SV*, ...) {
+    long Foo(int i, int j, ...) {
+
+The following definitions would not be recognized:
+
+    Foo(int i) {               # no return type
+    unsigned int Foo(int i) {  # 'unsigned int' not recognized
+    int Foo(num, str) double num; char* str; {
+    void Foo(void) {           # void only valid for return type
+
+Notice that C<Inline> only looks for function I<definitions>, not function I<prototypes>. Definitions are the syntax directly preceeding a function body. Also C<Inline> does not scan external files, like headers. Only the code passed to C<Inline> is used to create bindings; although other libraries can linked in, and called from C-space.
+
+=head1 C-Perl Bindings
+
+This section describes how the C<Perl> variables get mapped to C<C> variables and back again.
+
+First, you need to know how C<Perl> passes arguments back and forth to subroutines. Basically it uses a stack (also known as the B<Stack>). When a sub is called, all of the parenthesized arguments get expanded into a list of scalars and pushed onto the B<Stack>. The subroutine then pops all of its parameters off of the B<Stack>. When the sub is done, it pushes all of its return values back onto the B<Stack>. 
+
+The B<Stack> is an array of scalars known internally as C<SV>'s. The B<Stack> is actually an array of B<pointers to SV> or C<SV*>; therefore every element of the B<Stack> is natively a C<SV*>. For I<FMTYEWTK> about this, read C<perldoc perlguts>. 
+
+So back to variable mapping. XS uses a thing known as "typemaps" to turn each C<SV*> into a C<C> type and back again. This is done through various XS macro calls, casts and the Perl API. See C<perldoc perlapi>. XS allows you to define your own typemaps as well for fancier non-standard types such as C<typedef>-ed structs.
+
+C<Inline> uses a boiled down version of this approach. It parses your code for simple types and generates the XS code to map them. The currently supported types are:
+
+ - int
+ - long
+ - double
+ - char*
+ - void
+ - SV*
+
+If you need to deal with anything fancier, just use the generic C<SV*> type in the function definition. Then inside your code, do the mapping yourself.
+
+A return type of C<void> has a special meaning to C<Inline>. It means that you plan to push the values back onto the B<Stack> yourself. This is what you need to do to return a list of values. If you really don't want to return anything (the traditional meaning of C<void>) then simply don't push anything back.
+
+If ellipsis or C<...> is used at the end of an argument list, it means that any number of C<SV*>s may follow. Again you will need to pop the values off of the C<Stack> yourself.
+
+See L<"Examples"> below.
+
+=head1 The Inline Stack Macros
+
+When you write C<Inline> C, the following lines are automatically prepended to your code (by default):
+
+    #include "EXTERN.h"
+    #include "perl.h"
+    #include "XSUB.h"
+    #include "INLINE.h"
+
+The file C<INLINE.h> defines a set of macros that are useful for handling the Perl Stack from your C functions.
+
+=over 4
+
+=item Inline_Stack_Vars
+
+You'll need to use this one, if you want to use the others. It sets up a few local variables: C<sp>, C<items>, C<ax> and C<mark>, for use by the other macros. It's not important to know what they do, but I mention them to avoid possible name conflicts.
+
+=item Inline_Stack_Items
+
+Returns the number of arguments passed in on the Stack.
+
+=item Inline_Stack_Item(i)
+
+Refers to a particular C<SV*> in the Stack, where C<i> is an index number starting from zero. Can be used to get or set the value.
+
+=item Inline_Stack_Reset
+
+Use this before pushing anything back onto the Stack. It resets the internal Stack pointer to the beginning of the Stack.
+
+=item Inline_Stack_Push(sv)
+
+Push a return value back onto the Stack. The value must be of type C<SV*>.
+
+=item Inline_Stack_Done
+
+After you have pushed all of your return values, you must call this macro.
+
+=item Inline_Stack_Return(n)
+
+Return C<n> items on the Stack.
+
+=item Inline_Stack_Void
+
+A special macro to indicate that you really don't want to return anything. Same as:
+
+    Inline_Stack_Return(0);
+
+=back
+
+Each of these macros is available in 3 different styles to suit your coding tastes. The following macros are equivalent.
+
+    Inline_Stack_Vars
+    inline_stack_vars
+    INLINE_STACK_VARS
+
+All of this functionality is available through XS macro calls as well. So why duplicate the functionality? There are a few reasons why I decided to offer this set of macros. First, as a convenient way to access the Stack. Second, for consistent, self documenting, non-cryptic coding. Third, for future compatibility. It occured to me that if a lot of people started using XS macros for their C code, the interface might break under Perl6. By using this set, hopefully I will be able to insure future compatibility of argument handling.
+
+Of course, if you use the rest of the Perl API, your code will most likely break under Perl6. So this is not a 100% guarantee. But since argument handling is the most common interface you're likely to use, it seemed like a wise thinng to do.
+
+=head1 Writing C Subroutines
+
+The definitions of your C functions will fall into one of the following four categories. For each category there are special considerations.
+
+=over 4
+
+=item 1
+
+    int Foo(int arg1, char* arg2, SV* arg3) {
+
+This is the simplest case. You have a non C<void> return type and a fixed length argument list. You don't need to worry about much. All the conversions will happen automatically.
+
+=item 2
+
+    void Foo(int arg1, char* arg2, SV* arg3) {
+
+In this category you have a C<void> return type. This means that either you want to return nothing, or that you want to return a list. In the latter case you'll need to push values onto the B<Stack> yourself. There are a few C<Inline> macros that make this easy. Code something like this:
+
+    int i, max; SV* my_sv[10];
+    Inline_Stack_Vars;
+    Inline_Stack_Reset;
+    for (i = 0; i < max; i++)
+      Inline_Stack_Push(my_sv[i]);
+    Inline_Stack_Done;
+
+After resetting the Stack pointer, this code pushes a series of return values. At the end it uses C<Inline_Stack_Done> to mark the end of the return stack.
+
+If you really want to return nothing, then don't use the C<Inline_Stack_> macros. If you must use them, then set use C<Inline_Stack_Void> at the end of your function.
+
+=item 3
+
+    char* Foo(SV* arg1, ...) {
+
+In this category you have an unfixed number of arguments. This means that you'll have to pop values off the B<Stack> yourself. Do it like this:
+
+    int i;
+    Inline_Stack_Vars;
+    for (i = 0; i < Inline_Stack_Items; i++)
+      handle_sv(Inline_Stack_Item(i));
+
+The return type of C<Inline_Stack_Item(i)> is C<SV*>.
+
+=item 4
+
+    void* Foo(SV* arg1, ...) {
+
+In this category you have both a C<void> return type and an unfixed number of arguments. Just combine the techniques from Categories 3 and 4.
+
+=back
+
+=head1 Examples
+
+Here is a series of examples. Each one is a complete program that you can try running yourself. In fact, each example is stored in the C<examples/> subdirectory of the C<Inline.pm> distribution. They will start out simple and build in complexity.
+
+=head2 Example #1 - Greetings
+
+This example will take one string argument (a name) and print a greeting. The function is called with a string and with a number. In the second case the number is forced to a string.
+
+Notice that you do not need to C<#include <stdio.h>>. The C<perl.h> header file which gets included by default, automatically loads the standard C header files for you.
+
+    greet('Ingy');
+    greet(42);
+    
+    use Inline C => <<'END_OF_C_CODE';
+    
+    void greet(char* name) {
+      printf("Hello %s!\n", name);
+    }
+    
+    END_OF_C_CODE
+
+=head2 Example #2 - and Salutations
+
+This is similar to the last example except that the name is passed in as a C<SV*> (pointer to Scalar Value) rather than a string (C<char*>). That means we need to convert the C<SV> to a string ourselves. This is accomplished using the C<SvPVX> function which is part of the C<Perl> internal API. See C<perldoc perlapi> for more info.
+
+One problem is that C<SvPVX> doesn't automatically convert strings to numbers, so we get a little surprise when we try to greet C<42>.
+
+    greet('Ingy');
+    greet(42);
+    
+    use Inline C => <<'END_OF_C_CODE';
+    
+    void greet(SV* sv_name) {
+      printf("Hello %s!\n", SvPVX(sv_name));
+    }
+    
+    END_OF_C_CODE
+
+=head2 Example #3 - Fixing the problem
+
+We can fix the problem in Example #2 by using the C<SvPV> function instead. This function will stringify the C<SV> if it does not contain a string. C<SvPV> returns the length of the string as it's second parameter. Since we don't care about the length, we can just put C<PL_na> there, which is a special variable designed for that purpose.
+
+    greet('Ingy');
+    greet(42);
+    
+    use Inline C => <<'END_OF_C_CODE';
+    
+    void greet(SV* sv_name) {
+      printf("Hello %s!\n", SvPV(sv_name, PL_na));
+    }
+    
+    END_OF_C_CODE
+
+=head2 Example #4 - Return to Sender
+
+In this example we will return the greeting to the caller, rather than printing it. This would seem mighty easy, except for the fact that we need to allocate a small buffer to create the greeting.
+
+I would urge you to stay away from C<malloc>ing your own buffer. Just use Perl's built in memory management. In other words, just create a new Perl string scalar. The function C<newSVpv> does just that. And C<newSVpvf> includes C<sprintf> functionality.
+
+The other problem is getting rid of this new scalar. How will the ref count get decremented after we pass the scalar back? Perl also provides a function called C<sv_2mortal>. Mortal variables die when the context goes out of scope. In other words, Perl will wait until the new scalar gets passed back and then decrement the ref count for you, thereby making it eligible for garbage collection. See C<perldoc perlguts>.
+
+In this example the C<sv_2mortal> call gets done under the hood by XS, because we declared the return type to be C<SV*>. Later, in Example #6, when we manage the return stack by hand, we'll need to call it ourselves. 
+
+To view the generated XS code, run the command "C<perl -MInline=INFO,FORCE,NOCLEAN example004.pl>". This will leave the build directory intact and tell you where to find it.
+
+If all that sounds difficult, its not. Take a look:
+
+    print greet('Ingy');
+    print greet(42);
+    
+    use Inline C => <<'END_OF_C_CODE';
+    
+    SV* greet(SV* sv_name) {
+      return (newSVpvf("Hello %s!\n", SvPV(sv_name, PL_na)));
+    }
+    
+    END_OF_C_CODE
+
+=head2 Example #5 - The Welcome Wagon
+
+Let's modify the greet function to handle a group of people, or more exactly, a list of names. We use the C<C> ellipsis syntax: "C<...>", since the list can be of any size.
+
+Since there are no types or names associated with each argument, we can't expect XS to handle the conversions for us. We'll need to pop them off the B<Stack> ourselves. Luckily there are two functions (macros) that make this a very easy task.
+
+First, we need to begin our function with a "C<Inline_Stack_Vars>" statement. This defines a few internal variables that we need to access the B<Stack>. Now we can use "C<Inline_Stack_Items>", which returns an integer containing the number of arguments passed to us from Perl.
+
+B<NOTE:> It is important to I<only> use "C<Inline_Stack_>" macros when there is an ellipsis (C<...>) in the argument list, I<or> the function has a return type of void (See Example #6).
+
+Second, we use the C<Inline_Stack_Item(x)> function to access each argument where "0 <= x < items". Observe:
+
+    greet(qw(Brian Ingerson Ingy Me Myself I));
+    
+    use Inline C => <<'END_OF_C_CODE';
+    
+    void greet(SV* name1, ...) {
+      Inline_Stack_Vars;
+      int i;
+    
+      for (i = 0; i < Inline_Stack_Items; i++) 
+        printf("Hello %s!\n", SvPV(Inline_Stack_Item(i), PL_na));
+    
+      Inline_Stack_Void;
+    }
+    
+    END_OF_C_CODE
+
+B<NOTE:> When using a variable length argument list, you have to specify at least one argument before the ellipsis. (On my compiler, anyway.) When XS does it's argument checking, it will complain if you pass in less than the number of I<defined> arguments. Therefore, there is currently no way to pass an empty list when a variable length list is expected.
+
+=head2 Example #6 - Stop Repeating Yourself
+
+In this contrived example, we'll pass in the name to greet, and the number of times to do it. The C<greet();> function will return that number of greetings. The purpose is to demonstrate how to pass back a list of values.
+
+The first thing to do is set the function return type to void. This has a special meaning to C<Inline>. It means that you're going to handle the return stack yourself.
+
+Now we call "C<Inline_Stack_Vars>", which defines an internal stack pointer. Upon entry, the pointer will not be pointing at the beginning of the Stack, so we use "C<Inline_Stack_Reset>" to reset it.
+
+The C<Inline_Stack_Push> function does a lot for us. It pushes an C<SV> onto the B<Stack>, and updates the value of the Stack pointer. It also will extend the size of the B<Stack>, if it needs to, thus avoiding segfaults. 
+
+Finally, C<Inline_Stack_Done> stashes the new value of the Stack pointer back to where it belongs. Don't forget it or your function won't work right. You'll get a return list equal in size to your input list, which in this case is 2.
+
+    print greet('Ingy', 42);
+    
+    use Inline C => <<'END_OF_C_CODE';
+    
+    void greet(char* name, int number) {
+      Inline_Stack_Vars;
+      int i;
+    
+      Inline_Stack_Reset;
+      for (i = 0; i < number; i++)
+        Inline_Stack_Push(sv_2mortal(newSVpvf("Hello %s!\n", name))); 
+    
+      Inline_Stack_Done;
+    }
+    
+    END_OF_C_CODE
+
+Also notice that we used the C<sv_2mortal> call that was discussed earlier. This will make sure that your newborn scalars get DESTROYed at the appointed time.
+
+=head2 Example #7 - The Ugly
+
+The world is not made of scalars alone, although they are definitely the easiest creatures to deal with, when doing this kind of stuff. Sometimes we need to deal with arrays, hashes, and code references, among other things.
+
+Since Perl subroutine calls only pass scalars as arguments, we'll need to use the argument type C<SV*> and pass references to more complex types.
+
+Lets look a program that dumps the key/value pairs of a hash:
+
+    use Inline C => <<'END_OF_C_CODE';
+    
+    void dump_hash(SV* hash_ref) {
+      HV* hash;
+      HE* hash_entry;
+      int num_keys, i;
+      SV* sv_key;
+      SV* sv_val;
+    
+      if (! SvROK(hash_ref))
+        croak("hash_ref is not a reference");
+    
+      hash = (HV*)SvRV(hash_ref);
+      num_keys = hv_iterinit(hash);
+      for (i = 0; i < num_keys; i++) {
+        hash_entry = hv_iternext(hash);
+        sv_key = hv_iterkeysv(hash_entry);
+        sv_val = hv_iterval(hash, hash_entry);
+        printf("%s => %s\n", SvPV(sv_key, PL_na), SvPV(sv_val, PL_na));
+      }
+      return;
+    }
+    
+    END_OF_C_CODE
+    
+    my %hash = (
+	        Author => "Brian Ingerson",
+	        Nickname => "INGY",
+	        Module => "Inline.pm",
+	        Version => "0.25",
+	        Example => 7,
+	       );
+    
+    dump_hash(\%hash);
+
+To figure out this one, just curl up with C<perldoc perlapi> for a couple hours. Actually, its fairly straight forward once you are familiar with the calls. 
+
+Note the C<croak> function call. This is the proper way to die from your C<C> extensions.
+
+=head1 AUTHOR
+
+Brian Ingerson <INGY@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (c) 2000, Brian Ingerson. All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
+
+(see http://www.perl.com/perl/misc/Artistic.html)
+
+=cut

@@ -1,5 +1,16 @@
 Revision history for Perl extension Inline::Config.
 
+0.25  Sun Aug 20 20:01:11 PDT 2000
+	- Added 'INLINE.h' to the default headers list.
+
+0.25  Sun Aug 20 19:58:07 PDT 2000
+	- Rearranged the default search order for the build/install 
+	directories to (hopefully) the most desirable order.
+
+0.25  Sun Aug 20 19:55:54 PDT 2000
+	- Remove '/tmp/blib_I/' as a default build/install place, because
+	it could be used for possible security attacks.
+
 0.23  Wed Aug 16 18:10:07 PDT 2000
         - Added support for MSWin32 operating systems which use the MicroSoft Visual C++ compiler.
 

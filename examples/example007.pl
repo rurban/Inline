@@ -27,10 +27,8 @@ my %hash = (
 	    Author => "Brian Ingerson",
 	    Nickname => "INGY",
 	    Module => "Inline.pm",
-	    Version => "0.18",
+	    Version => "0.25",
 	    Example => 7,
 	   );
 
 dump_hash(\%hash);
-
-__END__

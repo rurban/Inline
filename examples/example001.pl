@@ -8,5 +8,3 @@ void greet(char* name) {
 }
 
 END_OF_C_CODE
-
-__END__
