@@ -6,7 +6,7 @@ require Exporter;
 $Math::Simple::VERSION = '1.23';
 
 use Inline (C => DATA =>
-	    NAME => 'Math::Simple::Stuff',
+	    NAME => 'Math::Simple',
 	    VERSION => '1.23',
 	   );
 

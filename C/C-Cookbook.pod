@@ -633,6 +633,58 @@ This code was written by Matt Sergeant <matt@sergeant.org>, author of many CPAN 
 
 =back
 
+=head2 Automatic Function Wrappers
+
+=over 4
+
+=item Problem
+
+You have some functions in a C library that you want to access from Perl exactly as you would from C.
+
+=item Solution
+
+The error function C<erf()> is probably defined in your standard math library.  Annoyingly, Perl does not let you access it. To print out a small table of its values, just say:
+
+    perl -le 'use Inline C => q{ double erf(double); }, ENABLE => "AUTOWRAP"; print "$_ @{[erf($_)]}" for (0..10)'
+
+The excellent C<Term::ReadLine::Gnu> implements Term::ReadLine using the GNU ReadLine library.  Here is an easy way to access just C<readline()> from that library:
+
+    package MyTerm;
+
+    use Inline C => Config =>
+               ENABLE => AUTOWRAP =>
+               LIBS => "-lreadline -lncurses -lterminfo -ltermcap ";
+    use Inline C => q{ char * readline(char *); };
+
+    package main;
+    my $x = MyTerm::readline("xyz: ");
+
+Note however that it fails to C<free()> the memory returned by readline, and that C<Term::ReadLine::Gnu> offers a much richer interface.
+
+=item Discussion
+
+We access existing functions by merely showing Inline their declarations, rather than a full definition. Of course the function declared must exist, either in a library already linked to Perl or in a library specified using the C<LIBS> option.
+
+The first example wraps a function from the standard math library, so Inline requires no additional C<LIBS> directive.  The second uses the Config option to specify the libraries that contain the actual compiled C code.
+
+This behavior is always disabled by default. You must enable the C<AUTOWRAP> option to make it work.
+
+=item See Also
+
+C<readline>, C<Term::ReadLine::Gnu>
+
+=item Credits
+
+GNU ReadLine was written by Brian Fox <bfox@ai.mit.edu> and Chet Ramey <chet@ins.cwru.edu>.  Term::ReadLine::Gnu was written by Hiroo Hayashi <hiroo.hayashi@computer.org>.  Both are far richer than the slim interface given here!
+
+The idea of producing wrapper code given only a function declaration is taken from Swig by David M. Beazley <beazley@cs.uchicago.edu>.
+
+Ingy's inline editorial insight:
+
+This entire entry was contributed by Ariel Scolnicov <ariels@compugen.co.il>. Ariel also first suggested the idea for Inline to support function declaration processing.
+
+=back
+
 =cut --------------------------------------------------------------------------
 
 =head2 Complex Data

@@ -56,6 +56,12 @@ Specifies extra statements to automatically included. They will be added onto th
 
     use C => Config => AUTO_INCLUDE => '#include "yourheader.h"';
 
+=head2 AUTOWRAP
+
+If you 'ENABLE => AUTOWRAP', Inline::C will parse function declarations (prototype statements) in your C code. For each declaration it can bind to, it will create a dummy wrapper that will call the real function which may be in an external library. This is a nice convenience for functions that would otherwise just require an empty wrapper function.
+
+This is similar to the base functionality you get from C<h2xs>. It can be very useful for binding to external libraries.
+
 =head2 BOOT
 
 Specifies C code to be executed in the XS BOOT section. Corresponds to the XS parameter.

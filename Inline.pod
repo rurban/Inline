@@ -556,7 +556,7 @@ Tells Inline to report its release version.
 
 =head1 Writing Modules with Inline
 
-Writing CPAN modules that use other programming languages is easy with Inline. Let's say that you wanted to write a module called C<Math::Simple>. Start by using the following command:
+Writing CPAN modules that use C code is easy with Inline. Let's say that you wanted to write a module called C<Math::Simple>. Start by using the following command:
 
     h2xs -PAXn Math::Simple
 
@@ -592,9 +592,9 @@ This will generate a bunch of files that form a skeleton of what you need for a 
       return x - y;
     }
 
-The important things to note here are that you B<must> specify a C<NAME> and C<VERSION> parameter. The NAME must match your package name or be an extension of it. For example C<Math::Simple::Part1> would work. The VERSION parameter must match the C<$VERSION> variable and they must be of the form C</\d\.\d\d/>.
+The important things to note here are that you B<must> specify a C<NAME> and C<VERSION> parameter. The C<NAME> must match your module's package name. The C<VERSION> parameter must match your module's C<$VERSION> variable and they must be of the form C</^\d\.\d\d$/>.
 
-NOTE: These are Inline's sanity checks to make sure you know what you're doing before uploading your code to CPAN. They insure that once the module has been installed on someone's system, the module would not get auotmatically recompiled for any reason. If a dependency is broken on an installed module, Inline will not load it, and will croak with an error message. This makes Inline based modules work in exactly the same manner as XS based ones.
+NOTE: These are Inline's sanity checks to make sure you know what you're doing before uploading your code to CPAN. They insure that once the module has been installed on someone's system, the module would not get automatically recompiled for any reason. This makes Inline based modules work in exactly the same manner as XS based ones.
 
 Finally, you need to modify the Makefile.PL. Simply change:
 
@@ -603,6 +603,14 @@ Finally, you need to modify the Makefile.PL. Simply change:
 to
 
     use Inline::MakeMaker;
+
+and change:
+
+    WriteMakefile(...);
+
+to
+
+    WriteInlineMakefile(...);
 
 When the person installing C<Math::Simple> does a "C<make>", the generated Makefile will invoke Inline in such a way that the C code will be compiled and the executable code will be placed into the C<./blib> directory. Then when a "C<make install>" is done, the module will be copied into the appropiate Perl sitelib directory (which is where an installed module should go).
 

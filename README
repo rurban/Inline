@@ -29,6 +29,14 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
+Inline version 0.41 is a minor release:
+
++ Added the AUTOWRAP feature for C
+  - Inline can now create wrappers from C function *declarations* alone.
++ Made Inline::MakeMaker work correctly in nested Makefile.PL trees.
++ Fixed bug preventing other Inline::* modules from installing in some cases.
++ Fixed platform dependent CRLF issues.
+
 Inline version 0.40 is a major upgrade. It includes:
 + Inline::MakeMaker
   + Rock solid support for writing CPAN extension modules
@@ -42,6 +50,11 @@ Inline version 0.40 is a major upgrade. It includes:
 + Safe new config and caching format.
   + Similar to Data::Denter format
 + New Inline-FAQ.pod.
+
+Inline version 0.34 fixes 2 minor bugs:
+
++ Makefile.PL got confused on $Config::Config{cc} with full pathnames or flags
++ Makefile.PL/Makefile dependency caused a problem in one rare case.
 
 Inline version 0.33 is a minor upgrade with the following changes:
 

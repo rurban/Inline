@@ -1,5 +1,18 @@
 Revision history for Perl extension Inline.
 
+0.41  Tue Jun  5 00:23:46 PDT 2001
+	- Don't install .inline or .inl files with Inline::MakeMaker.
+	  Require object name to be same as package name for installation.
+	  Put hack in INIT block to fix Sarathy's patch ;)
+
+0.41  Sat Jun  2 19:53:58 PDT 2001
+	- Fixed config generator path bug that would prevent other ILSMs
+	  from installing. Thanks Patrick.
+
+0.41  Sat Jun  2 19:53:58 PDT 2001
+	- Applied patch to (hopefully) handle CRLF variations properly.
+	  Thanks Binkley
+
 0.40  Sun May 27 18:59:59 PDT 2001
 	- Bugfix. NAME not set right without AUTONAME.
 

@@ -1,5 +1,8 @@
 Revision history for Perl extension Inline::C.
 
+0.41  Tue Jun  5 01:49:32 PDT 2001
+	- Added AUTOWRAP config option
+
 0.40  Sat May 26 13:47:16 PDT 2001
 	- Added hack to make work with Inline::Files and +w
 

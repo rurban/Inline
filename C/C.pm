@@ -41,6 +41,7 @@ sub validate {
     $o->{ILSM} ||= {};
     $o->{ILSM}{XS} ||= {};
     $o->{ILSM}{MAKEFILE} ||= {};
+    $o->{ILSM}{AUTOWRAP} ||= 0;
     $o->{ILSM}{AUTO_INCLUDE} ||= <<END;
 #include "EXTERN.h"
 #include "perl.h"
@@ -57,7 +58,9 @@ END
 
     while (@_) {
 	my ($key, $value) = (shift, shift);
-	if ($key eq 'MAKE') {
+	if ($key eq 'MAKE' or
+	    $key eq 'AUTOWRAP'
+	   ) {
 	    $o->{ILSM}{$key} = $value;
 	    next;
 	}
@@ -265,6 +268,7 @@ sub parse {
     require Parse::RecDescent;
     my $parser = $o->{ILSM}{parser} = Parse::RecDescent->new($grammar);
     $parser->{data}{typeconv} = $o->{ILSM}{typeconv};
+    $parser->{data}{AUTOWRAP} = $o->{ILSM}{AUTOWRAP};
 
     $o->{ILSM}{code} = $o->filter(@{$o->{ILSM}{FILTERS}});
     Inline::Struct::parse($o) if $o->{STRUCT}{'.any'};
