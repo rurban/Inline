@@ -1,26 +1,30 @@
 use strict;
 use ExtUtils::MakeMaker;
 use Config;
+use File::Spec;
 
 my ($cc, $exe) = @Config{'cc', '_exe'};
 $cc =~ s/\s+-.+$//; #remove possible trailing options
 
 my $found = 0;
 my $delim = $^O eq 'MSWin32' ? ';' : ':';
-if ($cc =~ m|/|) {
+if ($cc =~ m|/:\[|) {
     $found = -f "$cc$exe";
 }
 else {
     for my $lib (split $delim, $ENV{PATH}) {
-	$found = -f "$lib/$cc$exe" and last;
+	$found = -f File::Spec->catfile($lib,"$cc$exe") and last;
     }
 }
 
 print <<END;
 
 Inline::C is packaged with Inline.pm because it is the most commonly used
-Inline language module. See also: Inline::CPP (C++), ::Java, ::Python, 
-::Tcl, ::ASM, and ::CPR.
+Inline Language Support Module (ILSM). 
+
+See also: Inline::ASM, ::Awk, ::BC, ::Basic, ::Befunge, ::CPP (C++), ::CPR,
+          ::Foo, ::Guile, ::Java, ::Octave, ::PERL, ::Python, ::Ruby, ::TT, 
+          ::Tcl and ::WebChat.
 
 Config.pm indicates that your version of Perl was built with this C compiler:
 
@@ -60,10 +64,9 @@ while (1) {
 
 if ($answer =~ /^(y|yes)$/i) {
     WriteMakefile(
-	 	  NAME => 'Inline::C',
-		  VERSION_FROM => 'C.pm',
-		  clean => {FILES => '_Inline_test/'},
-		 )
+                  NAME => 'Inline::C',
+                  clean => {FILES => '_Inline_test'},
+                 )
 }
 else {
     open MF, "> Makefile" or die "Can't open Makefile for output";

@@ -8,11 +8,16 @@ Welcome to the official Inline FAQ. In this case, B<FAQ> means:
 
     Formerly Answered Questions
 
-This is a collection of old, long-winded emails that myself and others have sent to the Inline mailing list. (inline@perl.org) They have been reviewed and edited for general Inline edification. Some of them may be related to a specific language. They are presented here in a traditional FAQ layout.
+This is a collection of old, long-winded emails that myself and others
+have sent to the Inline mailing list. (inline@perl.org) They have been
+reviewed and edited for general Inline edification. Some of them may be
+related to a specific language. They are presented here in a traditional
+FAQ layout.
 
 =head1 General Inline
 
-Since there is only a handful of content so far, all FAQs are currently under this heading.
+Since there is only a handful of content so far, all FAQs are currently
+under this heading.
 
 =head2 How disposable is a .Inline or _Inline directory?
 
@@ -78,7 +83,7 @@ into a binary distribution *without* C source code.
 NOTE: The recipient of this binary distribution will need to have the
 PPM.pm module installed. This module requires a lot of other CPAN
 modules. ActivePerl (available for Win32, Linux, and Solaris) has all of
-these bundled. So while ActivePerl isn't required, it makes things (a
+these bundled. While ActivePerl isn't required, it makes things (a
 lot) easier.
 
 1) cd Inline-0.40/Math/Simple/
@@ -94,7 +99,7 @@ lot) easier.
     $Math::Simple::VERSION = '1.23';
     
     use Inline (C => 'src/Simple.c' =>
-                NAME => 'Math::Simple::Stuff',
+                NAME => 'Math::Simple',
                 VERSION => '1.23',
                );
     1;
@@ -112,39 +117,53 @@ lot) easier.
 So now you have the Perl in one file and the C in the other. The C code
 must be in a subdirectory.
 
-3) Note that I also changed the term 'DATA' to the name of the C file. This will work just as if the C were still inline.
+3) 
+Note that I also changed the term 'DATA' to the name of the C file. This
+will work just as if the C were still inline.
 
 4) Run 'perl Makefile.PL'
 
 5) Run 'make test'
 
-6) Get the MD5 key from 'blib/arch/auto/Math/Simple/Stuff/Stuff.inl'
+6) Get the MD5 key from 'blib/arch/auto/Math/Simple/Simple.inl'
 
-7) Edit 'blib/lib/Math/Simple.pm'. Change 'src/Simple.c' to '02c61710cab5b659efc343a9a830aa73' (the MD5 key)
+7) 
+Edit 'blib/lib/Math/Simple.pm'. Change 'src/Simple.c' to
+'02c61710cab5b659efc343a9a830aa73' (the MD5 key)
 
 8) Run 'make ppd'
 
-9) Edit 'Math-Simple.ppd'. Fill in AUTHOR and ABSTRACT if you wish. Then
+9) 
+Edit 'Math-Simple.ppd'. Fill in AUTHOR and ABSTRACT if you wish. Then
 change:
 
     <CODEBASE HREF="" />
 
 to
 
-    <CODEBASE HREF="./Math-Simple.tar.gz" />
+    <CODEBASE HREF="Math-Simple.tar.gz" />
 
-10) Run 'tar cvzf Math-Simple.tar.gz blib'
+10) Run:
 
-11) Run 'tar cvzf Math-Simple-1.23.tar.gz Math-Simple.ppd
-Math-Simple.tar.gz'
+    tar cvf Math-Simple.tar blib
+    gzip --best Math-Simple.tar
+
+11) 
+Run:
+
+    tar cvf Math-Simple-1.23.tar Math-Simple.ppd Math-Simple.tar.gz
+    gzip --best Math-Simple-1.23.tar
 
 12) Distribute Math-Simple-1.23.tar.gz with the following instructions:
 
-A) Run 'tar xvzf Math-Simple-1.23.tar.gz'
+A) Run: 
+
+    gzip -d Math-Simple-1.23.tar.gz
+    tar xvzf Math-Simple-1.23.tar
 
 B) Run 'ppm install Math-Simple.ppd'
 
-C) Run 'rm rm Math-Simple*'
+C) Delete Math-Simple.tar and Math-Simple.ppd.
 
 D) Test with:
 
@@ -158,13 +177,12 @@ haven't tried it.
 The recipient of the binary must have Perl built with a matching
 architecture. Luckily, ppm will catch this.
 
-This procedure requires 0.40-TRIAL8 (for no-source support).
-
 For a binary dist *with* C source code, simply omit steps 2, 3, 6, and
 7.
 
-If this seems too hard, then wait for version 0.41 and type:
+If this seems too hard, then in a future version you should be able to
+just type:
 
-    perl -MInline=makeppd Simple.pm
+    make ppm
 
 =cut
