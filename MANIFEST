@@ -13,9 +13,9 @@ C/t/01syntax.t
 C/t/02config.t
 C/t/03typemap.t
 C/t/04perlapi.t
+C/t/05xsmode.t
 C/t/typemap
 Changes
-Inline/Foo.pm
 Inline-API.pod
 Inline-FAQ.pod
 Inline-Support.pod
@@ -29,6 +29,7 @@ MakeMaker/test.pl
 Makefile.PL
 README
 lib/Inline/denter.pm
+lib/Inline/Foo.pm
 modules/Math/Simple/Simple.pm
 modules/Math/Simple/Makefile.PL
 modules/Math/Simple/test.pl

@@ -1,5 +1,21 @@
 Revision history for Perl extension Inline.
 
+0.43  Sat Jul 21 14:58:46 PDT 2001
+	- Removed *old* deprecated functionality.
+
+0.43  Sat Jul 21 14:53:33 PDT 2001
+	- Inline now works with *all* Perl release versions 5.005 and above.
+
+0.43  Thu Jul 19 17:29:17 PDT 2001
+	- I was comparing a version number to a md5 hash. Oops. Thanks Marcel.
+
+0.43  Thu Jul 19 17:29:17 PDT 2001
+	- Changed M51 error message which was causing confusion. It would
+	  often come up in places I didn't anticipate.
+
+0.43  Thu Jul 19 17:29:17 PDT 2001
+	- Use $Config{dlext} instead of $Config{so}. Thanks Marcel.
+
 0.42  Sun Jun 10 18:21:06 PDT 2001
 	- Re-fixed config generator path bug prevents ILSMs like I::Python
 	  and I::Tcl from installing. (NEILW)

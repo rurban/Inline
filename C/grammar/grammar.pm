@@ -7,7 +7,7 @@ $Inline::C::grammar::VERSION = '0.30';
 sub grammar {
     <<'END';
 
-c_code:	part(s) {1}
+code:	part(s) {1}
 
 part:	  comment
 	| function_definition

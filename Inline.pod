@@ -238,24 +238,6 @@ You can also specify multiple Inline sections, possibly in different programming
 
 An important thing to remember is that you need to have one "use Inline Foo => 'DATA'" for each "__Foo__" marker, and they must be in the same order. This allows you to apply different configuration options to each section.
 
-NOTE: Versions of Inline prior to 0.30 suggested a syntax of:
-
-    use Inline;
-    Inline->import(C => <DATA>);
-
-to read source code from the C<DATA> filehandle. This syntax has been deprecated. It will still work, but you will get a warning. It will soon be removed from the syntax. Use the new syntax for getting source code from the C<DATA> filehandle. If you really need to access Inline at run time, use the C<bind()> method instead. This (supported) code would do the same thing as the deprecated syntax:
-
-    use Inline;
-    Inline->bind(C => [<DATA>]);
-
-But the preferred practice is:
-
-    use Inline C => 'DATA';
-
-or just:
-
-    use Inline C;
-
 =head2 Configuration Options
 
 Inline trys to do the right thing as often as possible. But sometimes you may need to override the default actions. This is easy to do. Simply list the Inline configuration options after the regular Inline parameters. All congiguration options are specified as (key, value) pairs.

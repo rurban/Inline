@@ -1,5 +1,26 @@
 Revision history for Perl extension Inline::C.
 
+0.43  Sun Jul 22 08:15:26 PDT 2001
+	- Auto add script directory to INC path (-I)..
+
+0.43  Sat Jul 21 12:38:37 PDT 2001
+	- Added support for XSMODE.
+
+0.43  Fri Jul 20 03:29:08 PDT 2001
+	- Added OPTIMIZE config parameter for gdb debugging
+
+0.43  Thu Jul 19 17:29:17 PDT 2001
+	- Use $Config{dlext} instead of $Config{so}
+
+0.43  Sat Jul  7 13:18:36 PDT 2001
+	- Move the creation of a parser from parse() to get_parser(). This
+	  allows Inline::CPP to override only get_parser(). (NEILW)
+
+0.43  Sat Jul  7 12:53:33 PDT 2001
+	- Break up the generation of XS code into smaller stages which can 
+	  be overridden in Inline::CPP. Makes the code somewhat longer, but
+	  more clear. (NEILW)
+
 0.42  Sun Jun 10 23:50:27 PDT 2001
 	- Patch that fixes STRUCTS config option being used for explicit
 	  structs.

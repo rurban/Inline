@@ -1,5 +1,5 @@
 use Inline::MakeMaker;
 
 WriteInlineMakefile( NAME => 'Math::Simple',
-	       VERSION_FROM => 'Simple.pm',
-	     );
+	             VERSION_FROM => 'Simple.pm',
+	           );

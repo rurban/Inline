@@ -8,19 +8,18 @@ use Data::Dumper;
 use Carp;
 use Cwd qw(cwd abs_path);
 
-$Inline::C::VERSION = '0.42';
+$Inline::C::VERSION = '0.43';
 @Inline::C::ISA = qw(Inline);
 
 #==============================================================================
 # Register this module as an Inline language support module
 #==============================================================================
 sub register {
-    my $suffix = ($^O eq 'aix') ? 'so' : $Config{so};
     return {
 	    language => 'C',
 	    aliases => ['c'],
 	    type => 'compiled',
-	    suffix => $suffix,
+	    suffix => $Config{dlext},
 	   };
 }
 
@@ -41,7 +40,12 @@ sub validate {
     $o->{ILSM} ||= {};
     $o->{ILSM}{XS} ||= {};
     $o->{ILSM}{MAKEFILE} ||= {};
-    $o->{ILSM}{AUTOWRAP} ||= 0;
+    if (not $o->UNTAINT) {
+	require FindBin;
+	$o->{ILSM}{MAKEFILE}{INC} = "-I$FindBin::Bin";
+    }
+    $o->{ILSM}{AUTOWRAP} = 0 if not defined $o->{ILSM}{AUTOWRAP};
+    $o->{ILSM}{XSMODE} = 0 if not defined $o->{ILSM}{XSMODE};
     $o->{ILSM}{AUTO_INCLUDE} ||= <<END;
 #include "EXTERN.h"
 #include "perl.h"
@@ -59,7 +63,8 @@ END
     while (@_) {
 	my ($key, $value) = (shift, shift);
 	if ($key eq 'MAKE' or
-	    $key eq 'AUTOWRAP'
+	    $key eq 'AUTOWRAP' or
+	    $key eq 'XSMODE'
 	   ) {
 	    $o->{ILSM}{$key} = $value;
 	    next;
@@ -75,6 +80,7 @@ END
 	}
 	if ($key eq 'INC' or
 	    $key eq 'MYEXTLIB' or
+	    $key eq 'OPTIMIZE' or
 	    $key eq 'CCFLAGS' or
 	    $key eq 'LDDLFLAGS') {
 	    $o->add_string($o->{ILSM}{MAKEFILE}, $key, $value, '');
@@ -222,6 +228,10 @@ sub build {
 #==============================================================================
 sub info {
     my $o = shift;
+    return <<END if $o->{ILSM}{XSMODE};
+No information is currently generated when using XSMODE.
+
+END
     my $text = '';
     $o->parse unless $o->{ILSM}{parser};
     if (defined $o->{ILSM}{parser}{data}{functions}) {
@@ -253,27 +263,35 @@ sub config {
 sub parse {
     my $o = shift;
     return if $o->{ILSM}{parser};
-    my $grammar = Inline::C::grammar::grammar()
-      or croak "Can't find C grammar\n";
     $o->get_maps;
     $o->get_types;
+    $o->{ILSM}{code} = $o->filter(@{$o->{ILSM}{FILTERS}});
+    return if $o->{ILSM}{XSMODE};
 
-    $::RD_HINT++;
     my $hack = sub { # Appease -w using Inline::Files
 	print Parse::RecDescent::IN '';
         print Parse::RecDescent::IN '';
 	print Parse::RecDescent::TRACE_FILE '';
         print Parse::RecDescent::TRACE_FILE '';
     };
+    my $parser = $o->{ILSM}{parser} = $o->get_parser;
+
+    Inline::Struct::parse($o) if $o->{STRUCT}{'.any'};
+    $parser->code($o->{ILSM}{code})
+      or croak "Bad $o->{API}{language} code passed to Inline at @{[caller(2)]}\n";
+}
+
+# Create and initialize a parser
+sub get_parser {
+    my $o = shift;
+    my $grammar = Inline::C::grammar::grammar()
+      or croak "Can't find C grammar\n";
+    $::RD_HINT++;
     require Parse::RecDescent;
-    my $parser = $o->{ILSM}{parser} = Parse::RecDescent->new($grammar);
+    my $parser = Parse::RecDescent->new($grammar);
     $parser->{data}{typeconv} = $o->{ILSM}{typeconv};
     $parser->{data}{AUTOWRAP} = $o->{ILSM}{AUTOWRAP};
-
-    $o->{ILSM}{code} = $o->filter(@{$o->{ILSM}{FILTERS}});
-    Inline::Struct::parse($o) if $o->{STRUCT}{'.any'};
-    $parser->c_code($o->{ILSM}{code})
-      or croak "Bad C code passed to Inline at @{[caller(2)]}\n";
+    return $parser;
 }
 
 #==============================================================================
@@ -403,47 +421,112 @@ sub C_string ($) {
 }
 
 #==============================================================================
-# Generate the XS glue code
+# Write the XS code
 #==============================================================================
 sub write_XS {
     my $o = shift;
-    my ($pkg, $module, $modfname) = @{$o->{API}}{qw(pkg module modfname)};
-    my $prefix = (($o->{ILSM}{XS}{PREFIX}) ?
-		  "PREFIX = $o->{ILSM}{XS}{PREFIX}" :
-		  '');
-		  
+    my $modfname = $o->{API}{modfname};
+    my $module = $o->{API}{module};
     $o->mkpath($o->{API}{build_dir});
     open XS, "> $o->{API}{build_dir}/$modfname.xs"
       or croak $!;
-    print XS <<END;
-$o->{ILSM}{AUTO_INCLUDE}
-$o->{STRUCT}{'.macros'}
-$o->{ILSM}{code}
-$o->{STRUCT}{'.xs'}
+    if ($o->{ILSM}{XSMODE}) {
+	warn <<END if $^W and  $o->{ILSM}{code} !~ /MODULE\s*=\s*$module\b/;
+While using Inline XSMODE, your XS code does not have a line with
+
+  MODULE = $module
+
+You should use the Inline NAME config option, and it should match the
+XS MODULE name.
+
+END
+	print XS $o->xs_code;
+    }
+    else {
+	print XS $o->xs_generate;
+    }
+    close XS;
+}
+
+#==============================================================================
+# Generate the XS glue code (piece together lots of snippets)
+#==============================================================================
+sub xs_generate {
+    my $o = shift;
+    return join '', ($o->xs_includes,
+		     $o->xs_struct_macros,
+		     $o->xs_code,
+		     $o->xs_struct_code,
+		     $o->xs_bindings,
+		     $o->xs_boot,
+		    );
+}
+
+sub xs_includes {
+    my $o = shift;
+    return $o->{ILSM}{AUTO_INCLUDE};
+}
+
+sub xs_struct_macros {
+    my $o = shift;
+    return $o->{STRUCT}{'.macros'};
+}
+
+sub xs_code {
+    my $o = shift;
+    return $o->{ILSM}{code};
+}
+
+sub xs_struct_code {
+    my $o = shift;
+    return $o->{STRUCT}{'.xs'};
+}
+
+sub xs_boot {
+    my $o = shift;
+    if (defined $o->{ILSM}{XS}{BOOT} and
+	$o->{ILSM}{XS}{BOOT}) {
+	return <<END;
+BOOT:
+$o->{ILSM}{XS}{BOOT}
+END
+    }
+    return '';
+}
+
+sub xs_bindings {
+    my $o = shift;
+    my ($pkg, $module) = @{$o->{API}}{qw(pkg module)};
+    my $prefix = (($o->{ILSM}{XS}{PREFIX}) ?
+		  "PREFIX = $o->{ILSM}{XS}{PREFIX}" :
+		  '');
+    my $XS = <<END;
 
 MODULE = $module	PACKAGE = $pkg	$prefix
 
 PROTOTYPES: DISABLE
+
 END
+
     my $parser = $o->{ILSM}{parser};
     my $data = $parser->{data};
 
     warn("Warning. No Inline C functions bound to Perl\n" .
 	 "Check your C function definition(s) for Inline compatibility\n\n")
       if ((not defined$data->{functions}) and ($^W));
-    
+
     for my $function (@{$data->{functions}}) {
 	my $return_type = $data->{function}->{$function}->{return_type};
 	my @arg_names = @{$data->{function}->{$function}->{arg_names}};
 	my @arg_types = @{$data->{function}->{$function}->{arg_types}};
 
-	print XS ("\n$return_type\n$function (", 
+	$XS .= join '', ("\n$return_type\n$function (", 
 		  join(', ', @arg_names), ")\n");
 
 	for my $arg_name (@arg_names) {
 	    my $arg_type = shift @arg_types;
 	    last if $arg_type eq '...';
-	    print XS "\t$arg_type\t$arg_name\n";
+	    $XS .= "\t$arg_type\t$arg_name\n";
 	}
 
 	my $listargs = '';
@@ -452,7 +535,7 @@ END
 	my $arg_name_list = join(', ', @arg_names);
 
 	if ($return_type eq 'void') {
-	    print XS <<END;
+	    $XS .= <<END;
 	PREINIT:
 	I32* temp;
 	PPCODE:
@@ -468,7 +551,7 @@ END
 END
 	}
 	elsif ($listargs) {
-	    print XS <<END;
+	    $XS .= <<END;
 	PREINIT:
 	I32* temp;
 	CODE:
@@ -480,17 +563,8 @@ END
 END
 	}
     }
-    print XS "\n";
-
-    if (defined $o->{ILSM}{XS}{BOOT} and
-	$o->{ILSM}{XS}{BOOT}) {
-	print XS <<END;
-BOOT:
-$o->{ILSM}{XS}{BOOT}
-END
-    }
-
-    close XS;
+    $XS .= "\n";
+    return $XS;
 }
 
 #==============================================================================
@@ -640,7 +714,7 @@ sub fix_make {
     use strict;
     my (@lines, $fix);
     my $o = shift;
-
+    
     $o->{ILSM}{install_lib} = $o->{API}{install_lib};
     $o->{ILSM}{installdirs} = 'site';
     
@@ -648,7 +722,7 @@ sub fix_make {
       or croak "Can't open Makefile for input: $!\n";
     @lines = <MAKEFILE>;
     close MAKEFILE;
-
+    
     open(MAKEFILE, "> $o->{API}{build_dir}/Makefile")
       or croak "Can't open Makefile for output: $!\n";
     for (@lines) {

@@ -29,6 +29,17 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
+Inline version 0.43 is a minor release:
+
++ Added XSMODE for using Inline directly with XS
++ Now works with *all* Perl release versions over 5.005 (5.005_02, etc)
++ Removed old deprecated funstionality
++ Works on Mac OS X
++ Added support for ILSMs who don't want to invoke a build
++ Added script's working directory to the #include path for C
++ Tighter integration between Inline::C and Inline::CPP
++ Bug fixes reported on the mailing list.
+
 Inline version 0.42 is a minor release:
 
 + Applied a couple patches. Python and Tcl now install properly.

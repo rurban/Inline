@@ -2,7 +2,7 @@ package Inline;
 
 use strict;
 require 5.005;
-$Inline::VERSION = '0.42';
+$Inline::VERSION = '0.43';
 
 use AutoLoader 'AUTOLOAD';
 use Inline::denter;
@@ -61,8 +61,6 @@ sub SAFEMODE {$safemode}
 # This is where everything starts.
 #==============================================================================
 sub import {
-    goto &deprecated_import if $INIT; 
-
     local ($/, $") = ("\n", ' '); local ($\, $,);
 
     my $o;
@@ -77,7 +75,7 @@ sub import {
     $CONFIG{$pkg}{template} ||= $default_config;
 
     return unless @_;
-    @_ = (), goto &create_config_file if $_[0] eq '_CONFIG_';
+    &create_config_file(), return 1 if $_[0] eq '_CONFIG_';
     goto &maker_utils if $_[0] =~ /^(install|makedist|makeppd)$/i;
 
     my $control = shift;
@@ -136,25 +134,6 @@ sub import {
 }
 
 #==============================================================================
-# Handle old syntax
-#==============================================================================
-sub deprecated_import {
-    local ($/, $") = ("\n", ' '); local ($\, $,);
-    
-    my ($class, $language, @lines) = @_;
-    $INIT = 0, goto &import unless ($class eq 'Inline' and
-				    $language eq 'C' and
-				    @lines);
-    for (@lines) {
-	croak M44_usage_import() unless /\n/;
-    }
-
-    warn M50_usage_deprecated_import();
-    push @_, '_deprecated_import_';
-    goto &bind;
-}
-
-#==============================================================================
 # Run time version of import (public method)
 #==============================================================================
 sub bind {
@@ -169,16 +148,10 @@ sub bind {
     $CONFIG{$pkg}{template} ||= $default_config;
 
     my $language_id = shift or croak M03_usage_bind();
-    if ($_[-1] ne '_deprecated_import_') {
-	croak M03_usage_bind()
-	  unless ($language_id =~ /^\S+$/ and $language_id !~ /\n/);
-	$code = shift or croak M03_usage_bind();
-	@config = @_;
-    }
-    else {
-	pop @_;
-	$code = [@_];
-    }
+    croak M03_usage_bind()
+      unless ($language_id =~ /^\S+$/ and $language_id !~ /\n/);
+    $code = shift or croak M03_usage_bind();
+    @config = @_;
 	
     my $next = 0;
     for (@config) {
@@ -223,7 +196,7 @@ sub init {
 }
 
 sub END {
-    warn M51_usage_init() if @DATA_OBJS;
+    warn M51_unused_DATA() if @DATA_OBJS;
     print_version() if $version_requested && not $version_printed;
 }
 
@@ -277,7 +250,8 @@ sub glue {
 	$o->{CONFIG} = {(%{$o->{CONFIG}}, @config)};
     }
     $o->print_info if $o->{CONFIG}{PRINT_INFO};
-    unless ($o->{INLINE}{object_ready}) {
+    unless ($o->{INLINE}{object_ready} or
+	    not length $o->{INLINE}{ILSM_suffix}) {
 	$o->build();
 	$o->write_inl_file() unless $o->{CONFIG}{_INSTALL_};
     }
@@ -410,31 +384,12 @@ sub check_installed {
     $o->{API}{modfname} = $modparts[-1];
     $o->{API}{modpname} = join('/',@modparts);
     $realpath =~ s|\bblib[/\\]lib$|blib/arch|;
-    
-    my $suffix = ($^O eq 'aix') ? 'so' : $Config{so};
+
+    my $suffix = $Config{dlext};
     my $obj = "$realpath/auto/$o->{API}{modpname}/$o->{API}{modfname}.$suffix";
     croak M30_error_no_obj($o->{CONFIG}{NAME}, $o->{API}{pkg}, 
 			   $realpath) unless -f $obj;
-#    my %inl;
-#    {   local ($/, *INL);
-#	open INL, $inl or croak M31_inline_open_failed($inl);
-#	%inl = Inline::denter->new()->undent(<INL>);
-#    }
-#    croak M32_error_md5_validation($o->{INLINE}{md5}, $inl)
-#      unless ($o->{INLINE}{md5} eq $inl{md5});
-#    croak M33_error_old_inline_version($inl) 
-#      unless ($inl{md5} ge '0.40');
-#    croak M34_error_incorrect_version($inl) 
-#      if $inl{version} ne $o->{API}{version};
-#    $o->{API}{location} = "$realpath/auto/$o->{API}{modpname}/" . 
-#      "$o->{API}{modfname}.$inl{ILSM}{suffix}";
-#    croak M35_error_no_object_file($o->{API}{location}, $inl)
-#      unless -f $o->{API}{location};
-#    croak M57_wrong_architecture($o->{API}{location}, 
-#				 $inl{Config}{archname},
-#				 $Config{archname})
-#      unless $inl{Config}{archname} eq $Config{archname};
-    
+
     @{$o->{CONFIG}}{qw( PRINT_INFO 
 			REPORTBUG 
 			FORCE_BUILD
@@ -640,7 +595,7 @@ sub read_inline_file {
 sub check_config_file {
     my ($DIRECTORY, %config);
     my $o = shift;
-    
+
     croak M14_usage_Config() if defined %main::Inline::Config::;
     croak M63_no_source($o->{API}{pkg}) 
       if $o->{INLINE}{md5} eq $o->{API}{code};
@@ -823,7 +778,7 @@ sub check_module {
 	    %inl = Inline::denter->new()->undent(<INL>);
 	}
 	next unless ($o->{INLINE}{md5} eq $inl{md5});
-	next unless ($inl{md5} ge '0.40');
+	next unless ($inl{inline_version} ge '0.40');
 	unless (-f $o->{API}{location}) {
 	    warn <<END if $^W;
 Missing object file: $o->{API}{location}
@@ -1018,19 +973,21 @@ REPORTBUG mode in effect.
 
 Your Inline $o->{API}{language_id} code will be processed in the build directory:
 
-$o->{API}{build_dir}
+  $o->{API}{build_dir}
 
 A perl-readable bug report including your perl configuration and run-time
 diagnostics will also be generated in the build directory.
 
 When the program finishes please bundle up the above build directory with:
 
-tar czf Inline.REPORTBUG.tar.gz $o->{API}{build_dir}
+  tar czf Inline.REPORTBUG.tar.gz $o->{API}{build_dir}
 
-and send "Inline.REPORTBUG.tar.gz" as an email attachment to INGY\@cpan.org 
-with the subject line: "REPORTBUG: Inline.pm"
+and send "Inline.REPORTBUG.tar.gz" as an email attachment to the author
+of the offending Inline::* module with the subject line:
 
-Include in the email, a description of the problem and anything else that 
+  REPORTBUG: Inline.pm
+
+Include in the email, a description of the problem and anything else that
 you think might be helpful. Patches are welcome! :-\)
 
 <-----------------------End of REPORTBUG Section------------------------------>
@@ -1051,16 +1008,11 @@ END
     %Inline::REPORTBUG_Inline_Object = ();
     %Inline::REPORTBUG_Perl_Config = ();
     %Inline::REPORTBUG_Module_Versions = ();
-    my $report = Inline::denter->new()
+    print REPORTBUG Inline::denter->new()
       ->indent(*REPORTBUG_Inline_Object, $o, 
 	       *REPORTBUG_Perl_Config, \%Config::Config,
 	       *REPORTBUG_Module_Versions, \%versions,
 	      );
-    my $signature = Digest::MD5::md5_base64($report);
-    print REPORTBUG <<END;
-$report
-\$Inline::REPORTBUG_signature = '$signature';
-END
     close REPORTBUG;
 }
 
@@ -1169,8 +1121,7 @@ sub _rmtree {
     my($root);
     foreach $root (@{$roots}) {
         $root =~ s#/\z##;
-        lstat $root or next;
-        if ( -d _ ) {
+        if ( -d $root ) {
             if (opendir MYDIR, $root) {
                 @files = readdir MYDIR;
                 closedir MYDIR;
@@ -1716,14 +1667,6 @@ $err
 END
 }
 
-sub M44_usage_import {
-    return <<END;
-Calling Inline::import() directly is invalid. You probably want to use
-the Inline->bind() function. Please consult the Inline documentation.
-
-END
-}
-
 sub M45_usage_with {
     return <<END;
 Syntax error detected using 'use Inline with ...'.
@@ -1778,31 +1721,9 @@ Since you are running as the a privledged user, Inline.pm is terminating.
 END
 }
 
-sub M50_usage_deprecated_import {
+sub M51_unused_DATA {
     return <<END;
-Warning. The use of Inline->import() has been deprecated since Inline v0.30.
-It will be removed from the Inline module soon. You probably want to use one 
-of the following supported syntaxes:
-    use Inline language => 'DATA';
-      or
-    Inline->bind(language => [source-lines]);
-Please consult the Inline documentation for more information.
-
-END
-}
-
-sub M51_usage_init {
-    return <<END;
-It appears that you have used the 'DATA' form of Inline.pm but one or more
-code sections were not processed. This is because the internal INIT block
-could not be invoked automatically. You need to do it manually by placing the 
-following command after you Inline command(s).
-
-    Inline->init;
-
-We apologize for the inconvenience.
-
-    - the Management
+One or more DATA sections were not processed by Inline.
 
 END
 }

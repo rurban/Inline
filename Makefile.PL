@@ -4,7 +4,7 @@ WriteMakefile(
 	      NAME => 'Inline',
 	      VERSION_FROM => 'Inline.pm',
 	      PREREQ_PM => {
-			    Data::Dumper => 2.10,
+			    Data::Dumper => 2.09,
 			    Digest::MD5 => 2.09,
 			    Parse::RecDescent => 1.78,
 			   },

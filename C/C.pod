@@ -121,6 +121,10 @@ Specifies a user compiled object that should be linked in. Corresponds to the Ma
 
     use C => Config => MYEXTLIB => '/your/path/yourmodule.so';
 
+=head2 OPTIMIZE
+
+This controls the MakeMaker OPTIMIZE setting. By setting this value to '-g', you can turn on debugging support for your Inline extensions. This will allow you to be able to set breakpoints in your C code using a debugger like gdb.
+
 =head2 PREFIX
 
 Specifies a prefix that will be automatically stripped from C functions when they are bound to Perl. Useful for creating wrappers for shared library API-s, and binding to the original names in Perl. Also useful when names conflict with Perl internals. Corresponds to the XS parameter.
