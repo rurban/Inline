@@ -1,5 +1,15 @@
 Revision history for Perl extension Inline::C.
 
+0.32  Mon Feb 26 15:36:56 PST 2001
+	- Added MAKE config option
+	- Changed LDFLAGS to proper name LDDLFLAGS. (MakeMaker)
+
+0.32  Fri Feb 23 03:17:42 PST 2001
+	- Fixed Debian bug with $Config{installprivlib}. Also added warning if no default typemap, and croak if no typemaps at all.
+
+0.32  Fri Feb 23 03:16:27 PST 2001
+	- Special case for AIX ($Config{so})
+
 0.31  Thu Jan 18 22:02:17 PST 2001
 	- Added the following configuration options: 'CC', 'LD', 'CCFLAGS, 'LDFLAGS'. These are proxies for the MakeMaker options of the same names.
 

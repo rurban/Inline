@@ -132,7 +132,7 @@ C<Inline.pm> will detect such usage for you in its C<import> method, which is au
 
 =item 4
 
-It is not necessary to implement your parsing with C<Parse::RecDesect>. But I recommend it. :-)
+It is not necessary to implement your parsing with C<Parse::RecDescent>. But I recommend it. :-)
 
 =back
 
@@ -184,7 +184,7 @@ This routine gets passed all configuration options that were not already handled
 
 =head2 The build() Callback
 
-This subroutine is responsible for doing the parsing and compilation of the Foo++ source code. The Inline is passed as the only argument. All pertinent information will be stored in this object. C<build()> is required to create a shared object of a specific name, or to craok with an appropriate error message. 
+This subroutine is responsible for doing the parsing and compilation of the Foo++ source code. The Inline is passed as the only argument. All pertinent information will be stored in this object. C<build()> is required to create a shared object of a specific name, or to croak with an appropriate error message. 
 
 This is the meat of your ILSM. Since it will most likely be quite complicated, it is probably best that you study an existing ILSM like C<Inline::C>.
 

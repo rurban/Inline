@@ -27,6 +27,13 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
+Inline version 0.32 is a minor upgrade with the following changes:
+
++ Addition of UNTAINT, SAFEMODE, GLOBAL_LOAD, MAKE, and LDDLFLAGS
+  configuration options.
++ Fixed all reported (and some unreported) bugs.
++ Documentation enhancements.
+
 Inline version 0.31 is a minor upgrade with the following changes:
 
 + "use Inline C;" is now a synonym for "use Inline C => DATA;"

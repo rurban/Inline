@@ -1,13 +1,19 @@
+use strict;
+
 #==============================================================================
 # Various warnings and errors used by Inline.pm
 #==============================================================================
 sub error_old_version {
-    my ($config, $old_version) = @_;
-    my $error = <<END;
-You are attempting to use an Inline directory and config file that is too
-old for this version of Inline.pm. Please delete the directory and try again.
+    my ($old_version, $directory) = @_;
+    $old_version ||= '???';
+    return <<END;
+You are using Inline version $Inline::VERSION with a directory that was 
+configured by Inline version $old_version. This version is no longer supported.
+Please delete the following directory and try again:
+
+    $directory
+
 END
-    return $error;
 }
 
 sub usage {
@@ -77,7 +83,7 @@ END
 }
 
 sub usage_language {
-    my $language = shift;
+    my ($language, $directory) = @_;
     return <<END;
 Error. You have specified '$language' as an Inline programming language.
 
@@ -85,7 +91,9 @@ I currently only know about the following languages:
     ${\ join(', ', sort keys %Inline::config::languages)}
 
 If you have installed a support module for this language, try deleting the
-config file from your Inline DIRECTORY, and run again.
+config file from the following Inline DIRECTORY, and run again:
+
+    $directory
 
 END
 }
@@ -184,6 +192,52 @@ END
 sub usage_loader {
     return <<END;
 ERROR. The loader that was invoked is for compiled languages only.
+
+END
+}
+
+sub usage_unsafe {
+    return <<END .
+You are using the Inline.pm module with the UNTAINT and SAFEMODE options,
+but without specifying the DIRECTORY option. This is potentially unsafe.
+Either use the DIRECTORY option or turn off SAFEMODE.
+
+END
+      ($_[0] ? <<END : "");
+Since you are running as the a privledged user, Inline.pm is terminating.
+
+END
+}
+
+sub usage_init {
+    return <<END;
+It appears that you have used the 'DATA' form of Inline.pm but one or more
+code sections were not processed. This is because the internal INIT block
+could not be invoked automatically. You need to do it manually by placing the 
+following command after you Inline command(s).
+
+    Inline->init;
+
+We apologize for the inconvenience.
+
+    - the Management
+
+END
+}
+
+sub error_nocode {
+    my $language = shift;
+    return <<END;
+No $language source code found for Inline.
+
+END
+}
+
+sub error_eval {
+    my ($subroutine, $msg) = @_;
+    return <<END;
+An eval() failed in Inline::$subroutine:
+$msg
 
 END
 }

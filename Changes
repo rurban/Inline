@@ -1,5 +1,31 @@
 Revision history for Perl extension Inline.
 
+0.32  Mon Feb 26 07:44:34 PST 2001
+	- Add DIRECTORY path to applicable warnings and error msgs
+
+0.32  Mon Feb 26 07:42:32 PST 2001
+	- Warn if UNTAINT && SAFEMODE && ! DIRECTORY (croak if root)
+
+0.32  Mon Feb 26 01:07:15 PST 2001
+	- Added GLOBAL_LOAD option with GLOBAL shortcut.
+
+0.32  Mon Feb 26 01:00:00 PST 2001
+	- Added SAFEMODE option.
+	- Safe->reval(DIRECTORY/config) if SAFE.
+	- Blindly untaint all %ENV variables for UNTAINT.
+
+0.32  Fri Feb 23 03:20:19 PST 2001
+	- Fixed MSWin32 bug of getting full path parts in dll name.
+
+0.32  Thu Feb 22 02:35:04 PST 2001
+	- Fixed the "cut & paste" bug. (DOS line endings in Unix.)
+
+0.32  Thu Feb 22 02:10:07 PST 2001
+	- Fixed detection of using Inline::Config.
+
+0.32  Wed Feb 21 23:40:33 PST 2001
+	- Added UNTAINT option, which lets you use Inline with Perl's -T flag.
+
 0.31  Fri Jan 19 00:13:31 PST 2001
 	- Changed doc instances of 'C<Inline>' to 'Inline'.
 

@@ -2,7 +2,7 @@ package Inline;
 
 use strict;
 require 5.005;
-$Inline::VERSION = '0.31';
+$Inline::VERSION = '0.32';
 
 use Inline::messages;
 use Config;
@@ -15,6 +15,8 @@ my %CONFIG = ();
 my @DATA_OBJS = ();
 my $INIT = 0;
 my $version_printed;
+my $untaint = 0;
+my $safemode = 0;
 
 my %shortcuts = 
   (
@@ -25,6 +27,10 @@ my %shortcuts =
    NOCLEAN =>      [CLEAN_AFTER_BUILD => 0],
    REPORTBUG =>    [REPORTBUG => 1],
    SITE_INSTALL => [SITE_INSTALL => 1],
+   UNTAINT =>      [UNTAINT => 1],
+   SAFE =>         [SAFEMODE => 1],
+   UNSAFE =>       [SAFEMODE => 0],
+   GLOBAL =>       [GLOBAL_LOAD => 1],
   );
 
 my $default_config = 
@@ -38,7 +44,13 @@ my $default_config =
    PRINT_VERSION => 0,
    REPORTBUG => 0,
    SITE_INSTALL => 0,
+   UNTAINT => 0,
+   SAFEMODE => -1,
+   GLOBAL_LOAD => 0,
   };
+
+sub UNTAINT {$untaint}
+sub SAFEMODE {$safemode}
 
 #==============================================================================
 # This is where everything starts.
@@ -50,6 +62,7 @@ sub import {
 
     my $o;
     my ($pkg, $script) = caller;
+    $pkg =~ s/^.*[\/\\]//;
     my $class = shift;
     if ($class ne 'Inline') {
 	croak usage_use($class) if $class =~ /^Inline::/;
@@ -68,7 +81,12 @@ sub import {
 	return handle_config($pkg, @_);
     }
     elsif ($shortcuts{uc($control)}) {
-	return handle_shortcuts($pkg, $control, @_);
+	handle_shortcuts($pkg, $control, @_);
+	if ($CONFIG{$pkg}{template}{PRINT_VERSION}) {	
+	    print_version();
+	    exit;
+	}
+	return 1;
     }
     elsif ($control =~ /^\S+$/ and $control !~ /\n/) {
 	my $language_id = $control;
@@ -165,10 +183,14 @@ END
 sub init {
     local $/ = "\n"; local $\; local $" = ' '; local $,;
 
-    for my $o (@DATA_OBJS) {
+    while (my $o = shift(@DATA_OBJS)) {
 	$o->read_DATA;
 	$o->glue;
     }
+}
+
+sub END {
+    warn usage_init if @DATA_OBJS;
 }
 
 #==============================================================================
@@ -181,24 +203,23 @@ sub glue {
 		  %{$CONFIG{$pkg}{$language_id} || {}},
 		  %{$o->{config} || {}},
 		 );
-    @config = $o->check_config(@config);
-    $o->check_config_file;
+    @config = $o->check_config(@config);  # Security flags set here
+    $o->check_config_file;                # Final DIRECTORY set here.
     push @config, $o->with_configs;
     my $language = $o->{language};
-
-    print_version() if $o->{config}{PRINT_VERSION};
-    reportbug() if $o->{config}{REPORTBUG};
-    croak "No $language_id source code found\n" unless $o->{code};
+    croak error_nocode($language_id) unless $o->{code};
  	
     $o->check_module;
-    
+
+    $o->untaint_object if UNTAINT;
+    $o->reportbug() if $o->{config}{REPORTBUG};
     if ($o->{config}{PRINT_INFO} or
 	$o->{config}{FORCE_BUILD} or
 	$o->{config}{SITE_INSTALL} or
-	$o->{config}{REPORT_BUG} or
+	$o->{config}{REPORTBUG} or
 	not $o->{mod_exists}) {
 	eval "require $o->{ILSM_module}";
-	croak $@ if $@;
+	croak error_eval('glue', $@) if $@;
 	bless $o, $o->{ILSM_module};    
 	$o->validate(@config);
     }
@@ -218,7 +239,7 @@ sub glue {
 	ref($o) eq 'Inline'
        ) {
 	eval "require $o->{ILSM_module}";
-	croak $@ if $@;
+	croak error_eval('glue', $@) if $@;
 	bless $o, $o->{ILSM_module};    
     }
 
@@ -271,12 +292,12 @@ sub read_DATA {
     $DATA{$pkg} ||= '';
     unless ($DATA{$pkg} eq $language_id) {
 	while (<Inline::DATA>) {
-	    last if /^__($language_id)__$/;
+	    last if /^__(\Q$language_id\E)__\r?$/;
 	}
     }
     while (<Inline::DATA>) {
 	last if /^\=\w+/;
-	if (/^__(\S+)__$/) {
+	if (/^__(\S+)__\r?$/) {
 	    $DATA{$pkg} = $1;
 	    last;
 	}
@@ -312,6 +333,7 @@ sub check_config {
 	    push @others, $key, $value;
 	}
     }
+    $o->security;
     $o->{config}{DIRECTORY} ||= $o->find_temp_dir;
     return (@others);
 }
@@ -321,17 +343,17 @@ sub check_config {
 # whether the Language code is valid or not.
 #==============================================================================
 sub check_config_file {
-    my ($DIRECTORY);
+    my ($DIRECTORY, $stash);
     my $o = shift;
     
-    croak usage_Config if exists $main::{Config::};
+    croak usage_Config if defined %main::Inline::Config::;
 
     # First make sure we have the DIRECTORY
     if ($o->{config}{SITE_INSTALL}) {
 	my $cwd = Cwd::cwd();
 	$DIRECTORY = $o->{config}{DIRECTORY} = "$cwd/_Inline/";
 	if (not -d $DIRECTORY) {
-	    mkdir($DIRECTORY, 0777)
+	    _mkdir($DIRECTORY, 0777)
 	      or croak "Can't mkdir $DIRECTORY to build Inline code.\n";
 	}
     }
@@ -346,20 +368,28 @@ sub check_config_file {
     my $config = join '', <CONFIG>;
     close CONFIG;
 
-    delete $main::{Inline::config::};
-    eval <<END;
-;package Inline::config;
-no strict;
-$config
-END
+    ($config) = $config =~ /(.*)/s if UNTAINT;
 
-    croak error_old_version 
-      unless (defined $Inline::config::version and
-	      $Inline::config::version >= 0.31);
+    no strict;
+    unless (SAFEMODE) {
+	$stash = 
+	  eval ";package Inline::config;$config;\\%{Inline::config::}";
+    }
+    else {
+	require Safe;
+	my $s = Safe->new;
+	$stash =
+	  $s->reval(";package Inline::config;$config;\\%{Inline::config::}");
+    }
+    use strict;
+
     croak "Unable to parse ${DIRECTORY}config\n$@\n" if $@;
-    croak usage_language($o->{language_id})
-      unless defined $Inline::config::languages{$o->{language_id}};
-    $o->{language} = $Inline::config::languages{$o->{language_id}};
+    croak error_old_version(${$stash->{version}}, $DIRECTORY)
+	unless (defined ${$stash->{version}} and
+		${$stash->{version}} >= 0.32);
+    croak usage_language($o->{language_id}, $DIRECTORY)
+      unless defined ${$stash->{languages}}{$o->{language_id}};
+    $o->{language} = ${$stash->{languages}}{$o->{language_id}};
 
     if ($o->{language} ne $o->{language_id}) {
 	if (defined $o->{$o->{language_id}}) {
@@ -368,11 +398,9 @@ END
 	}
     }
 
-    $o->{ILSM_type} = $Inline::config::types{$o->{language}};
-    $o->{ILSM_module} = $Inline::config::modules{$o->{language}};
-    $o->{ILSM_suffix} = $Inline::config::suffixes{$o->{language}};
-
-#    print Dumper $o;
+    $o->{ILSM_type} = ${$stash->{types}}{$o->{language}};
+    $o->{ILSM_module} = ${$stash->{modules}}{$o->{language}};
+    $o->{ILSM_suffix} = ${$stash->{suffixes}}{$o->{language}};
 }
 
 #==============================================================================
@@ -397,6 +425,8 @@ sub create_config_file {
 		warn usage_Config if $^W;
 		next;
 	    }
+	    next if $mod eq 'Files';
+	    ($mod) = $mod =~ /(.*)/ if UNTAINT;
 	    eval "require Inline::$mod;\$register=&Inline::${mod}::register";
 	    croak usage_register($mod, $@) if $@;
 	    my $language = $register->{language} 
@@ -425,6 +455,7 @@ sub create_config_file {
     my $modules = Data::Dumper::Dumper(\%modules);
     my $suffixes = Data::Dumper::Dumper(\%suffixes);
     
+    ($file) = $file =~ /(.*)/ if UNTAINT;
     open CONFIG, "> $file" or croak "Can't open $file for output\n";
     print CONFIG <<END;
 \$version = $Inline::VERSION;
@@ -538,12 +569,15 @@ sub load {
     require DynaLoader;
     @Inline::ISA = qw(DynaLoader);
 
+    my $global = $o->{config}{GLOBAL_LOAD} ? '0x01' : '0x00';
+
     eval <<END;
 	package $pkg;
 	push \@$ {pkg}::ISA, qw($module);
 
 	package $module;
 	push \@$ {module}::ISA, qw(Exporter DynaLoader);
+        sub dl_load_flags { $global } 
 	bootstrap $module;
 END
     croak("Had problems bootstrapping Inline module $module\n$@\n") if $@;
@@ -615,6 +649,47 @@ sub handle_shortcuts {
 }
 
 #==============================================================================
+# Set security flags.
+#==============================================================================
+sub security {
+    my $o = shift;
+    $untaint = $o->{config}{UNTAINT} || 0;
+    $safemode = (($o->{config}{SAFEMODE} == -1) ?
+		 ($untaint ? 1 : 0) :
+		 $o->{config}{SAFEMODE}
+		);
+    if (UNTAINT and
+	SAFEMODE and
+	not $o->{config}{DIRECTORY}) {
+	croak usage_unsafe(1) if ($< == 0 or $> == 0);
+	warn usage_unsafe(0) if $^W;
+    }
+}
+
+#==============================================================================
+# Blindly untaint tainted fields in Inline object.
+#==============================================================================
+sub untaint_object {
+    my $o = shift;
+
+    ($o->{ILSM_module}) = $o->{ILSM_module} =~ /(.*)/;
+    ($o->{build_dir}) = $o->{build_dir} =~ /(.*)/;
+    ($o->{config}{DIRECTORY}) = $o->{config}{DIRECTORY} =~ /(.*)/;
+    ($o->{install_lib}) = $o->{install_lib} =~ /(.*)/;
+    ($o->{modpname}) = $o->{modpname} =~ /(.*)/;
+    ($o->{modfname}) = $o->{modfname} =~ /(.*)/;
+    ($o->{language}) = $o->{language} =~ /(.*)/;
+    ($o->{pkg}) = $o->{pkg} =~ /(.*)/;
+    ($o->{module}) = $o->{module} =~ /(.*)/;
+    
+    for (keys %ENV) {
+	($ENV{$_}) = $ENV{$_} =~ /(.*)/;
+    }
+    $ENV{PATH} = join ':', grep {not /^\./} split /\:/, $ENV{PATH};
+    map {($_) = /(.*)/} @INC;
+}
+
+#==============================================================================
 # Perform cleanup duties
 #==============================================================================
 sub DESTROY {
@@ -647,18 +722,18 @@ sub clean_build {
 # 
 #==============================================================================
 sub error_copy {
-    require File::Copy;
-    require File::Path;
+    use File::Copy;
     my ($src_file, $new_file);
     my $o = shift;
     delete @{$o->{parser}}{grep {!/^data$/} keys %{$o->{parser}}};
     my $src_dir = $o->{build_dir};
     my $new_dir = $o->{config}{DIRECTORY} . "errors";
 
-    File::Path::rmtree($new_dir);
-    File::Path::mkpath($new_dir);
+    _rmtree($new_dir);
+    $o->mkpath($new_dir);
     opendir DIR, $src_dir;
     while ($src_file = readdir(DIR)) {
+	($src_file) = $src_file =~ /(.*)/ if UNTAINT;
 	next unless -f "$src_dir/$src_file";
 	($new_file = $src_file) =~ s/_?[0-9abcdef]{32}//g;
 	File::Copy::copy("$src_dir/$src_file", "$new_dir/$new_file");
@@ -736,7 +811,8 @@ END
 sub print_version {
     return if $version_printed++;
     print STDERR <<END;
-You are using Inline.pm version $Inline::VERSION
+
+    You are using Inline.pm version $Inline::VERSION
 
 END
 }
@@ -805,7 +881,7 @@ sub mkpath {
       ? shift(@parts) . '/'  #MSWin32 Drive Letter (ie C:)
 	: '/';
     foreach (@parts){
-	-d "$path$_" || mkdir("$path$_", 0777);
+	-d "$path$_" || _mkdir("$path$_", 0777);
 	$path .= "$_/";
     }
     croak "Couldn't make directory path $mkpath"
@@ -817,10 +893,9 @@ sub mkpath {
 #==============================================================================
 sub rmpath {
     use strict;
-    use File::Path();
     my ($o, $prefix, $rmpath) = @_;
 # Nuke the target directory
-    File::Path::rmtree("$prefix$rmpath");
+    _rmtree("$prefix$rmpath");
 # Remove any empty directories underneath the requested one
     my @parts = grep {$_} split(/\//,$rmpath);
     pop @parts;
@@ -829,6 +904,35 @@ sub rmpath {
 	rmdir "$prefix$rmpath"
 	  or last; # rmdir failed because dir was not empty
 	pop @parts;
+    }
+}
+
+sub _rmtree {
+    my($roots) = @_;
+    my(@files);
+    $roots = [$roots] unless ref $roots;
+    my($root);
+    foreach $root (@{$roots}) {
+        $root =~ s#/\z##;
+        lstat $root or next;
+        if ( -d _ ) {
+            if (opendir MYDIR, $root) {
+                @files = readdir MYDIR;
+                closedir MYDIR;
+            }
+            else {
+                croak "Can't read $root: $!";
+            }
+
+            @files = map("$root/$_", grep $_!~/^\.{1,2}\z/s,@files);
+            _rmtree(\@files);
+	    ($root) = $root =~ /(.*)/ if UNTAINT;
+            rmdir($root) or croak "Can't remove directory $root: $!";
+        }
+        else { 
+	    ($root) = $root =~ /(.*)/ if UNTAINT;
+	    unlink($root) or croak "Can't unlink file $root: $!";
+        }
     }
 }
 
@@ -878,19 +982,26 @@ sub find_temp_dir {
     elsif (defined $cwd and $cwd and
 	   -d $cwd and
 	   -w $cwd and
-	   mkdir("$cwd/_Inline/", 0777)) {
+	   _mkdir("$cwd/_Inline/", 0777)) {
 	$temp_dir = "$cwd/_Inline/";
     }
     elsif (defined $bin and $bin and
 	   -d $bin and
 	   -w $bin and
-	   mkdir("$bin/_Inline/", 0777)) {
+	   _mkdir("$bin/_Inline/", 0777)) {
 	$temp_dir = "$bin/_Inline/";
     }
 
     croak "Couldn't find an appropriate DIRECTORY for Inline to use.\n"
       unless $temp_dir;
     return $TEMP_DIR = abs_path($temp_dir) . '/';
+}
+
+sub _mkdir {
+    my $dir = shift;
+    my $mode = shift || 0777;
+    ($dir) = ($dir =~ /(.*)/) if UNTAINT;
+    return mkdir($dir, $mode);
 }
 
 1;

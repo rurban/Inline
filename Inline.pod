@@ -126,15 +126,19 @@ Instead of specifying the source code as a here-document string, you may want to
       return x - y;
     }
 
-This syntax makes use of a special marker: C<__C__>. 'C' is the programming language you are binding to. Inline will read through the DATA filehandle and look for the special marker. It will use everything up until the next marker, a POD command, or the end of the file. This allows you to specify multiple Inline sections, possibly in different programming languages, and POD documentation all in the same place. If you want to specify AutoLoader subroutines as well, put them before the first Inline marker. Here is another example:
+This syntax makes use of the source-file keyword, C<'DATA'>, and a special marker: C<__C__>. 'C' is the programming language you are binding to. Inline will read through the DATA filehandle and look for the special marker. It will use everything up until the next marker, a POD command, or the end of the file. 
+
+NOTE: The 'DATA' keyword can be ommitted if there are no extra parameters following it.
+
+This allows you to specify multiple Inline sections, possibly in different programming languages, and POD documentation all in the same place. If you want to specify AutoLoader subroutines as well, put them before the first Inline marker. Here is another example:
 
     # The module Foo.pm
     package Foo;
     use AutoLoader;
     
-    use Inline C => 'DATA';
-    use Inline C => 'DATA';
-    use Inline Python => 'DATA';
+    use Inline C;
+    use Inline C;
+    use Inline Python;
     
     1;
     
@@ -174,6 +178,10 @@ to read source code from the C<DATA> filehandle. This syntax has been deprecated
 But the preferred practice is:
 
     use Inline C => 'DATA';
+
+or just:
+
+    use Inline C;
 
 =head2 Configuration Options
 
@@ -267,6 +275,14 @@ or better yet:
 
     perl -MInline=INFO,FORCE Foo.pl
 
+=head2 The Inline DIRECTORY
+
+Inline needs a place to build your code and to install the results of the build. It uses a single directory named C<'.Inline/'> under normal circumstances. If you create this directory in your home directory, the current directory or in the directory where your program resides, Inline will find and use it. You can also specify it in the environment variable C<PERL_INLINE_DIRECTORY> or directly in your program, by using the C<DIRECTORY> keyword option. If Inline cannot find the directory in any of these places it will create a C<'_Inline/'> directory in either your current directory or the directory where your script resides.
+
+One of the key factors to using Inline successfully, is understanding this directory. When developing code it is usually best to create this directory (or let Inline do it) in your current directory. Remember that there is nothing sacred about this directory except that it holds your compiled code. Feel free to delete it at any time. Inline will simply start from scratch and recompile your code on the next run. If you have several programs that you want to force to recompile, just delete your C<'.Inline/'> directory.
+
+It is probably best to have a separate C<'.Inline/'> directory for each project that you are working on. You may want to keep stable code in the <.Inline/> in your home directory. On multi-user systems, each user should have their own C<'.Inline/'> directories. It could be a security risk to put the directory in a shared place like C</tmp/>.
+
 =head2 Debugging Inline Errors
 
 All programmers make mistakes. When you make a mistake with Inline, like writing bad C code, you'll get a big error report on your screen. This report tells you where to look to do the debugging. 
@@ -308,6 +324,20 @@ C<WITH> can also be used as a configuration option instead of using the special 
 
 Modules specified using the config form of C<WITH> will B<not> be automatically required. You must C<use> them yourself.
 
+=head2 GLOBAL_LOAD
+
+This option is for compiled languages only. It tells Inline to tell DynaLoader to load an object file in such a way that its symbols can be dynamically resolved by other object files. May not work on all platforms.
+
+=head2 UNTAINT
+
+You must use this option  whenever you use Perl's C<-T> switch, for taint checking. This option tells Inline to blindly untaint all tainted variables. It also turns on SAFEMODE by default.
+
+=head2 SAFEMODE
+
+Perform extra safety checking, in an attempt to thwart malicious code. This option cannot guarantee security, but it does turn on all the currently implemented checks.
+
+There is a slight startup penalty by using SAFEMODE. Also, using UNTAINT automatically turns this option on. If you need your code to start faster under C<-T> (taint) checking, you'll need to turn this option off manually. Only do this if you are not worried about security risks.
+
 =head2 NOWARN
 
     use Inline C => DATA => NOWARN => 1;
@@ -330,9 +360,17 @@ You can specify multiple shortcuts separated by commas. They are not case sensit
 
 =over 4
 
-=item VERSION
+=item CLEAN
 
-Tells Inline to report it's release version and supported languages.
+Tells Inline to remove any build directories that may be lying around in your build area. Normally these directories get removed immediately after a successful build. Exceptions are when the build fails, or when you use the NOCLEAN or REPORTBUG options.
+
+=item FORCE
+
+Forces the code to be recompiled, even if everything is up to date.
+
+=item GLOBAL
+
+Turns on the GLOBAL_LOAD option.
 
 =item INFO
 
@@ -342,17 +380,15 @@ This is a very useful option when you want to know what's going on under the hoo
 
 Tells Inline to leave the build files after compiling.
 
-=item CLEAN
-
-Tells Inline to remove any build directories that may be lying around in your build area. Normally these directories get removed immediately after a successful build. Exceptions are when the build fails, or when you use the NOCLEAN or REPORTBUG options.
-
-=item FORCE
-
-Forces the code to be recompiled, even if everything is up to date.
-
 =item REPORTBUG
 
-Puts Inline into 'REPORTBUG' mode, which does special processing when you want to report a bug. REPORTBUG also automatically forces a build, and doesn't clean up afterwards. This is so that you can tar and mail the build directory to me. REPORTBUG will print exact instructions on what to do.
+Puts Inline into 'REPORTBUG' mode, which does special processing when you want to report a bug. REPORTBUG also automatically forces a build, and doesn't clean up afterwards. This is so that you can tar and mail the build directory to me. REPORTBUG will print exact instructions on what to do. Please read and follow them carefully.
+
+NOTE: REPORTBUG informs you to use the tar command. If your system does not have tar, please use the equivalent C<zip> command.
+
+=item SAFE
+
+Turns SAFEMODE on. UNTAINT will turn this on automatically. While this mode performs extra security checking, it does not guarantee safety.
 
 =item SITE_INSTALL
 
@@ -363,6 +399,18 @@ This is the one shortcut that is not normally used from the command line. You pu
     use Inline SITE_INSTALL;
 
 This causes 'make test' to put the compiled results in the right place.
+
+=item UNSAFE
+
+Turns SAFEMODE off. Use this in combination with UNTAINT for slightly faster startup time under C<-T>. Only use this if you are sure the environment is safe.
+
+=item UNTAINT
+
+Turn the UNTAINT option on. Used with C<-T> switch.
+
+=item VERSION
+
+Tells Inline to report it's release version. Program will exit immediately after version is printed.
 
 =back
 

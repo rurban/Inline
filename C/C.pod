@@ -4,7 +4,7 @@ Inline::C - Write Perl Subroutines in C
 
 =head1 DESCRIPTION
 
-C<Inline::C> is a module that allows you to write Perl subroutines in C. Since version 0.30 the Inline module supports multiple programming languages and eeach language has its own support module. This document describes how to use Inline with the C programming language. It also goes a bit into Perl C internals.
+C<Inline::C> is a module that allows you to write Perl subroutines in C. Since version 0.30 the Inline module supports multiple programming languages and each language has its own support module. This document describes how to use Inline with the C programming language. It also goes a bit into Perl C internals.
 
 If you want to start working with programming examples right away, check out L<Inline::C-Cookbook>. For more information on Inline in general, see L<Inline>.
 
@@ -47,34 +47,6 @@ Notice that Inline only looks for function I<definitions>, not function I<protot
 
 For information on how to specify Inline configuration options, see L<Inline>. This section describes each of the configuration options available for C. Most of the options correspond either to MakeMaker or XS options of the same name. See L<ExtUtils::MakeMaker> and L<perlxs>.
 
-=head2 LIBS
-
-Specifies external libraries that should be linked into your code. Corresponds to the MakeMaker parameter.
-
-    use C => Config => LIBS => '-lyourlib';
-
-or 
-
-    use C => Config => LIBS => '-L/your/path -lyourlib';
-
-=head2 INC
-
-Specifies an include path to use. Corresponds to the MakeMaker parameter.
-
-    use C => Config => INC => '-I/inc/path';
-
-=head2 MYEXTLIB
-
-Specifies a user compiled object that should be linked in. Corresponds to the MakeMaker parameter.
-
-    use C => Config => MYEXTLIB => '/your/path/yourmodule.so';
-
-=head2 TYPEMAPS
-
-Specifies extra typemap files to use. These types will modify the behaviour of the C parsing. Corresponds to the MakeMaker parameter.
-
-    use C => Config => TYPEMAPS => '/your/path/typemap';
-
 =head2 AUTO_INCLUDE
 
 Specifies extra statements to automatically included. They will be added onto the defaults. A newline char will be automatically added.
@@ -85,11 +57,61 @@ Specifies extra statements to automatically included. They will be added onto th
 
 Specifies C code to be executed in the XS BOOT section. Corresponds to the XS parameter.
 
+=head2 CC
+
+Specify which compiler to use.
+
+=head2 CCFLAGS
+
+Specify extra compiler flags.
+
+=head2 INC
+
+Specifies an include path to use. Corresponds to the MakeMaker parameter.
+
+    use C => Config => INC => '-I/inc/path';
+
+=head2 LD
+
+Specify which linker to use.
+
+=head2 LDDLFLAGS
+
+Specify which linker flags to use. 
+
+NOTE: These flags will completely override the existing flags, instead of just adding to them. So if you need to use those too, you must respecify them here.
+
+=head2 LIBS
+
+Specifies external libraries that should be linked into your code. Corresponds to the MakeMaker parameter.
+
+    use C => Config => LIBS => '-lyourlib';
+
+or 
+
+    use C => Config => LIBS => '-L/your/path -lyourlib';
+
+=head2 MAKE
+
+Specify the name of the 'make' utility to use.
+
+=head2 MYEXTLIB
+
+Specifies a user compiled object that should be linked in. Corresponds to the MakeMaker parameter.
+
+    use C => Config => MYEXTLIB => '/your/path/yourmodule.so';
+
 =head2 PREFIX
 
 Specifies a prefix that will be automatically stripped from C functions when they are bound to Perl. Useful for creating wrappers for shared library API-s, and binding to the original names in Perl. Also useful when names conflict with Perl internals. Corresponds to the XS parameter.
 
     use C => Config => PREFIX => 'ZLIB_';
+
+=head2 TYPEMAPS
+
+Specifies extra typemap files to use. These types will modify the behaviour of the C parsing. Corresponds to the MakeMaker parameter.
+
+    use C => Config => TYPEMAPS => '/your/path/typemap';
 
 =head1 C-Perl Bindings
 
@@ -101,7 +123,9 @@ The B<Stack> is an array of scalars known internally as C<SV>'s. The B<Stack> is
 
 So back to variable mapping. XS uses a thing known as "typemaps" to turn each C<SV*> into a C<C> type and back again. This is done through various XS macro calls, casts and the Perl API. See C<perldoc perlapi>. XS allows you to define your own typemaps as well for fancier non-standard types such as C<typedef>-ed structs.
 
-Inline uses the default Perl typemap file for its default types. It parses your code for these types and generates the XS code to map them. The most commonly used types are:
+Inline uses the default Perl typemap file for its default types. This file is called C</usr/local/lib/perl5/5.6.1/ExtUtils/typemap>, or something similar, depending on your Perl installation. It has definitions for over 40 types, which are automatically used by Inline. (You should probably browse this file at least once, just to get an idea of the possibilities.)
+
+Inline parses your code for these types and generates the XS code to map them. The most commonly used types are:
 
  - int
  - long
@@ -110,7 +134,7 @@ Inline uses the default Perl typemap file for its default types. It parses your 
  - void
  - SV*
 
-If you need to deal with anything fancier, just use the generic C<SV*> type in the function definition. Then inside your code, do the mapping yourself. Alternatively, you can create your own typemap files and specify them using the C<TYPEMAPS> configuration option.
+If you need to deal with a type that is not in the defaults, just use the generic C<SV*> type in the function definition. Then inside your code, do the mapping yourself. Alternatively, you can create your own typemap files and specify them using the C<TYPEMAPS> configuration option.
 
 A return type of C<void> has a special meaning to Inline. It means that you plan to push the values back onto the B<Stack> yourself. This is what you need to do to return a list of values. If you really don't want to return anything (the traditional meaning of C<void>) then simply don't push anything back.
 
@@ -134,6 +158,8 @@ The file C<INLINE.h> defines a set of macros that are useful for handling the Pe
 =item Inline_Stack_Vars
 
 You'll need to use this one, if you want to use the others. It sets up a few local variables: C<sp>, C<items>, C<ax> and C<mark>, for use by the other macros. It's not important to know what they do, but I mention them to avoid possible name conflicts.
+
+NOTE: Since this macro declares variables, you'll need to put it with your other variable declarations at the top of your function. It must come before any executable statements and before any other C<Inline_Stack> macros.
 
 =item Inline_Stack_Items
 

@@ -10,18 +10,19 @@ use FindBin;
 use Carp;
 use Cwd qw(cwd abs_path);
 
-$Inline::C::VERSION = '0.31';
+$Inline::C::VERSION = '0.32';
 @Inline::C::ISA = qw(Inline);
 
 #==============================================================================
 # Register this module as an Inline language support module
 #==============================================================================
 sub register {
+    my $suffix = ($^O eq 'aix') ? 'so' : $Config{so};
     return {
 	    language => 'C',
 	    aliases => ['c'],
 	    type => 'compiled',
-	    suffix => $Config{so},
+	    suffix => $suffix,
 	   };
 }
 
@@ -51,6 +52,10 @@ END
 
     while (@_) {
 	my ($key, $value) = (shift, shift);
+	if ($key eq 'MAKE') {
+	    $o->{C}{$key} = $value;
+	    next;
+	}
 	if ($key eq 'CC' or
 	    $key eq 'LD') {
 	    $o->{C}{MAKEFILE}{$key} = $value;
@@ -63,7 +68,7 @@ END
 	if ($key eq 'INC' or
 	    $key eq 'MYEXTLIB' or
 	    $key eq 'CCFLAGS' or
-	    $key eq 'LDFLAGS') {
+	    $key eq 'LDDLFLAGS') {
 	    add_string($o->{C}{MAKEFILE}, $key, $value, '');
 	    next;
 	}
@@ -204,7 +209,17 @@ sub parse {
 #==============================================================================
 sub get_maps {
     my $o = shift;
-    unshift @{$o->{C}{MAKEFILE}{TYPEMAPS}}, "$Config::Config{installprivlib}/ExtUtils/typemap";
+
+    my $typemap = '';
+    $typemap = "$Config::Config{installprivlib}/ExtUtils/typemap"
+      if -f "$Config::Config{installprivlib}/ExtUtils/typemap";
+    $typemap = "$Config::Config{privlibexp}/ExtUtils/typemap"
+      if (not $typemap and -f "$Config::Config{privlibexp}/ExtUtils/typemap");
+    warn "Can't find the default system typemap file"
+      if (not $typemap and $^W);
+
+    unshift(@{$o->{C}{MAKEFILE}{TYPEMAPS}}, $typemap) if $typemap;
+
     if (-f "$FindBin::Bin/typemap") {
 	push @{$o->{C}{MAKEFILE}{TYPEMAPS}}, "$FindBin::Bin/typemap";
     }
@@ -217,7 +232,9 @@ sub get_maps {
 sub get_types {
     my (%type_kind, %proto_letter, %input_expr, %output_expr);
     my $o = shift;
-
+    croak "No typemaps specified for Inline C code"
+      unless @{$o->{C}{MAKEFILE}{TYPEMAPS}};
+    
     my $proto_re = "[" . quotemeta('\$%&*@;') . "]";
     foreach my $typemap (@{$o->{C}{MAKEFILE}{TYPEMAPS}}) {
 	next unless -e $typemap;
@@ -481,9 +498,10 @@ sub compile {
 
     -f ($perl = $Config::Config{perlpath})
       or croak "Can't locate your perl binary";
-    ($make = $Config::Config{make})
+    $make = $o->{C}{MAKE} || $Config::Config{make}
       or croak "Can't locate your make binary";
     $cwd = &cwd;
+    ($cwd) = $cwd =~ /(.*)/ if $o->UNTAINT;
     for $cmd ("$perl Makefile.PL > out.Makefile_PL 2>&1",
 	      \ &fix_make,   # Fix Makefile problems
 	      "$make > out.make 2>&1",
@@ -493,6 +511,7 @@ sub compile {
 	    $o->$cmd();
 	}
 	else {
+	    ($cmd) = $cmd =~ /(.*)/ if $o->UNTAINT;
 	    chdir $build_dir;
 	    system($cmd) and do {
 		$o->error_copy;
