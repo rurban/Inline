@@ -1,12 +1,12 @@
 package Inline;
 
-require 5.002;  # for ExtUtils::MakeMaker compatibility
+require 5.005;                # Parse::RecDescent requires this.
 use strict;
 use vars qw($VERSION @ISA);
 use AutoLoader 'AUTOLOAD';
 require DynaLoader;
 @ISA = qw(DynaLoader AutoLoader);
-$VERSION = '0.22';
+$VERSION = '0.23';
 
 use Inline::Config;
 use Config;
@@ -142,6 +142,7 @@ sub check_module {
     my @modparts = split(/::/,$o->{module});
     $o->{modfname} = $modparts[-1];
     $o->{modpname} = join('/',@modparts);
+    $o->{so} = $Config::Config{so};
 
     $o->{build_dir} = 
       Inline::Config::_get_build_prefix() . $o->{modpname} . '/';
@@ -152,13 +153,13 @@ sub check_module {
 	croak "Invalid attempt to do SITE_INSTALL\n"
 	  unless (-d $blib and -w $blib);
 	$o->{location} = 
-	  "$blib/arch/auto/$o->{modpname}/$o->{modfname}.so";
+	  "$blib/arch/auto/$o->{modpname}/$o->{modfname}.$o->{so}";
 	$o->{install_lib} = "$blib/arch/";
 	return;
     }
 
     $o->{location} =
-      "$Config{installsitearch}/auto/$o->{modpname}/$o->{modfname}.so";
+      "$Config::Config{installsitearch}/auto/$o->{modpname}/$o->{modfname}.$o->{so}";
     $o->{install_lib} = Inline::Config::_get_install_lib();
     if (-f $o->{location}) {
 	$o->{mod_exists} = 1;
@@ -166,13 +167,13 @@ sub check_module {
 	    $Inline::Config::REPORTBUG) {
 	    unshift @::INC, $o->{install_lib};
 	    $o->{location} =
-	      "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.so"; 
+	      "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{so}"; 
 	}
     }
     else {
 	unshift @::INC, $o->{install_lib};
 	$o->{location} = 
-	  "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.so"; 
+	  "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{so}"; 
 	if (-f $o->{location}) {
 	    $o->{mod_exists} = 1;
 	}
@@ -210,6 +211,7 @@ __END__
 # User wants to report a bug
 #==============================================================================
 sub reportbug {
+    use strict;
     use Data::Dumper;
     my $o = shift;
     return if $o->{reportbug_handled}++;
@@ -272,6 +274,7 @@ END
 # Print a small report if PRINT_INFO option is set.
 #==============================================================================
 sub print_info {
+    use strict;
     my $o = shift;
 
     print STDERR <<END;
@@ -332,6 +335,7 @@ END
 # Parse the function definition information out of the C code
 #==============================================================================
 sub parse_C {
+    use strict;
     use Data::Dumper;
     use Parse::RecDescent;
 
@@ -396,6 +400,7 @@ END_OF_GRAMMAR
 # Generate the XS glue code
 #==============================================================================
 sub write_XS {
+    use strict;
     my $o = shift;
     my ($pkg, $module, $modfname) = @{$o}{qw(pkg module modfname)};
 
@@ -463,6 +468,7 @@ END
 # Generate the Makefile.PL
 #==============================================================================
 sub write_Makefile_PL {
+    use strict;
     use Data::Dumper;
 
     my $o = shift;
@@ -496,25 +502,29 @@ END
 # Run the build process.
 #==============================================================================
 sub compile {
-    my $o = shift;
+    use strict;
+    use Cwd;
+    my ($o, $perl, $make, $cmd, $cwd);
+    $o = shift;
     my ($module, $modpname, $modfname, $build_dir, $install_lib) = 
       @{$o}{qw(module modpname modfname build_dir install_lib)};
 
-    my $cmd_prefix = "cd $build_dir && ";
-    -f (my $perl = $Config{perlpath})
+    -f ($perl = $Config::Config{perlpath})
       or croak "Can't locate your perl binary";
-    (my $make = $Config{make})
+    ($make = $Config::Config{make})
       or croak "Can't locate your make binary";
-    for my $cmd ("$perl Makefile.PL > out.Makefile_PL 2>&1",
+    $cwd = cwd;
+    chdir $build_dir;
+    for $cmd ("$perl Makefile.PL > out.Makefile_PL 2>&1",
 		 \ &fix_make,   # Fix Makefile problems
 		 "$make > out.make 2>&1",
 		 "$make install > out.make_install 2>&1",
 		) {
 	if (ref $cmd) {
 	    $o->$cmd();
-	} 
+	}
 	else {
-	    system("$cmd_prefix$cmd") and croak <<END;
+	    system($cmd) and croak <<END;
 
 A problem was encountered while attempting to compile and install your Inline
 $o->{language} code. The command that failed was:
@@ -528,6 +538,7 @@ To debug the problem, cd to the build directory, and inspect the output files.
 END
 	}
     }
+    chdir $cwd;
 
     if ($Inline::Config::CLEAN_AFTER_BUILD and 
 	not $Inline::Config::REPORTBUG
@@ -535,6 +546,8 @@ END
 	$o->rmpath(Inline::Config::_get_build_prefix(), $modpname);
 	unlink "$install_lib/auto/$modpname/.packlist";
 	unlink "$install_lib/auto/$modpname/$modfname.bs";
+	unlink "$install_lib/auto/$modpname/$modfname.exp"; #MSWin32
+	unlink "$install_lib/auto/$modpname/$modfname.lib"; #MSWin32
     }
 }
 
@@ -556,6 +569,7 @@ my %fixes = (
 	    );
 	     
 sub fix_make {
+    use strict;
     my (@lines, $fix);
     my $o = shift;
 
@@ -585,6 +599,7 @@ sub fix_make {
 # Clean the build directory from previous builds
 #==============================================================================
 sub clean_build {
+    use strict;
     my ($prefix, $dir);
     my $o = shift;
 
@@ -606,9 +621,12 @@ sub clean_build {
 #==============================================================================
 
 sub mkpath {
+    use strict;
     my ($o, $mkpath) = @_;
-    my $path = "/";
     my @parts = grep {$_} split(/\//,$mkpath);
+    my $path = ($parts[0] =~ /^[A-Z]:$/)
+      ? shift(@parts) . '/'  #MSWin32 Drive Letter (ie C:)
+	: '/';
     foreach (@parts){
 	-d "$path$_" || mkdir("$path$_", 0777);
 	$path .= "$_/";
@@ -618,6 +636,7 @@ sub mkpath {
 }
 
 sub rmpath {
+    use strict;
     use File::Path();
     my ($o, $prefix, $rmpath) = @_;
 # Nuke the target directory

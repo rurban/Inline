@@ -14,11 +14,13 @@ int subtract(int x, int y) {
 
 int print_test(int test_num) {
     printf("ok %d\n", test_num);
+    return 1;
 }
 
 int print_test_ref(SV* test_num_ref) {
     int test_num = (int) SvIV(SvRV(test_num_ref));
     printf("ok %d\n", test_num);
+    return 1;
 }
 
 END_OF_C_CODE

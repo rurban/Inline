@@ -17,7 +17,7 @@ use vars qw($VERSION
 	    $AUTOLOAD
 	    $INSTALL_SUFFIX
 	   );
-$VERSION = '0.22';
+$VERSION = '0.23';
 
 use Config;
 use Carp;
@@ -81,7 +81,6 @@ AUTOLOAD {
 # Public methods
 #==============================================================================
 sub _get_build_prefix {
-#    _check_site_install();
     if ($BUILD_PREFIX) {
 	$BUILD_PREFIX = abs_path($BUILD_PREFIX);
 	$BUILD_PREFIX .= '/' unless $BUILD_PREFIX =~ m|/$|;
@@ -93,7 +92,6 @@ sub _get_build_prefix {
 }
 
 sub _get_install_prefix {
-#    _check_site_install();
     if ($INSTALL_PREFIX) {
 	$INSTALL_PREFIX = abs_path($INSTALL_PREFIX);
 	$INSTALL_PREFIX .= '/' unless $INSTALL_PREFIX =~ m|/$|;
@@ -106,9 +104,9 @@ sub _get_install_prefix {
 
 sub _get_install_suffix {
     return $INSTALL_SUFFIX if $INSTALL_SUFFIX;
-    my $suffix = $Config::Config{sitearch};
-    $suffix =~ s{^.*(/site.*)$}{$1};
-    croak <<'END' if $suffix eq $Config::Config{sitearch};
+    my $suffix = abs_path($Config::Config{sitearch});
+    $suffix =~ s|^.*(/site.*)$|$1| 
+      or croak <<'END';
 Can\'t parse your perl configuration to find an appropriate install suffix.
 Try setting $Inline::Config::INSTALL_SUFFIX yourself.
 END
@@ -116,7 +114,6 @@ END
 }
 
 sub _get_install_lib {
-#    _check_site_install();
     my $prefix = _get_install_prefix();
     return $INSTALL_LIB = $INSTALL_LIB ||
       ($prefix . 
@@ -124,18 +121,6 @@ sub _get_install_lib {
        _get_install_suffix()
       );
 }
-
-#sub _check_site_install {
-#    if ($SITE_INSTALL) {
-#	$INSTALL_PREFIX = $Config::Config{prefix};
-#	$INSTALL_LIB = $Config::Config{installsitearch};
-#	croak <<END unless -w $INSTALL_LIB;
-#Invalid attempt to install Inline code.
-#You dont have write permission for:
-#  $INSTALL_LIB
-#END
-#    }
-#}
 
 my $temp_dir_checked = 0;
 sub _find_temp_dir {
@@ -155,7 +140,7 @@ END
     $home = $ENV{HOME} || '';
     $bin = $FindBin::Bin;
     $cwd = abs_path('.');
-    $env = $ENV{PERL_INLINE} || '';
+    $env = $ENV{PERL_INLINE_BLIB} || '';
     
     if ($env and
 	-d $env and

@@ -96,6 +96,9 @@ into distributed modules (like on the CPAN) will get compiled when the
 module is installed (during ``<CODE>make test</CODE>''), so the end user will never notice the compilation time.
 
 <P>
+Best of all, it works the same on both Unix and Microsoft Windows. See <A HREF="#SUPPORTED_PLATFORMS">SUPPORTED PLATFORMS</A> below.
+
+<P>
 <HR>
 <H2><A NAME="Why_Inline_">Why Inline?</A></H2>
 <P>
@@ -256,9 +259,9 @@ By default <CODE>Inline</CODE> will try to build under the first one of the foll
 valid directory and is writable:
 
 <P>
-<PRE> - $ENV{PERL_INLINE} # the PERL_INLINE environment variable
- - ~/.blib_I/
- - ~/blib_I/
+<PRE> - $ENV{PERL_INLINE_BLIB}  # environment variable set to directory path
+ - $ENV{HOME}/.blib_I/
+ - $ENV{HOME}/blib_I/
  - $bin/blib_I/      # the directory that the script is in
  - ./blib_I/
  - /tmp/blib_I/
@@ -834,11 +837,17 @@ use XS) can be installed, using the typical install format of:
     make install
 </PRE>
 <P>
+It has been tested on many Unix variants and Windows NT.
+
+<P>
+<STRONG>NOTE</STRONG>: <CODE>Inline.pm</CODE> requires Perl 5.005 or higher because <CODE>Parse::RecDescent</CODE> requires it. (Something to do with the <CODE>qr</CODE> operator)
+
+<P>
 Inline has been tested on the following platforms:
 
 <P>
 <PRE> V#   OS      OS V#   Perl V# Human              Email 
- 0.22 Linux   2.2.13  5.00503 Brian Ingerson     ingy@cpan.org
+ 0.23 Linux   2.2.13  5.00503 Brian Ingerson     ingy@cpan.org
  0.22 Linux   2.2.13  5.6     Brian Ingerson     ingy@cpan.org
  0.20 FreeBSD 3.4     5.00503 Timothy A Gregory  tgregory@tarjema.com      
  0.20 FreeBSD 4.0     5.00503 Timothy A Gregory  tgregory@tarjema.com      
@@ -849,14 +858,40 @@ Inline has been tested on the following platforms:
  0.20 SunOS   5.5.1   5.6.0   Jamie Shaffer      jshaffer@chronology.com
  0.22 OpenBSD 2.7     5.6.0   Jeremy Devenport   jeremy@weezel.com
  0.22 FreeBSD 3.1     5.00503 Doug Beaver        dougb@scalar.org
+ 0.23 WinNT   4.0 sp6 5.00503 Brian Ingerson     ingy@cpan.org
 </PRE>
 <P>
-If <CODE>Inline</CODE> works on your Unix platform, please email me the info above. If it doesn't
-work, see <A HREF="#BUGS_AND_DEFICIENCIES">BUGS AND DEFICIENCIES</A> below.
+The Microsoft test deserves a little more explanation. I used the
+following:
 
 <P>
-I would like to port this to Win32 as soon as possible, but that's a big
-step for me. Any takers?
+<PRE> Windows NT 4.0 (service pack 6)
+ Perl 5.005_03 (ActiveState build 522)
+ MS Visual C++ 6.0
+ The &quot;nmake&quot; make utility (distributed w/ Visual C++)
+</PRE>
+<P>
+<CODE>Inline.pm</CODE> pulls all of its base configuration (including which <CODE>make</CODE> utility to use) from <CODE>config.pm</CODE>. Since your MSWin32 version of Perl probably came from ActiveState (as a
+binary distribution) the <CODE>Config.pm</CODE> will indicate that <CODE>nmake</CODE> is the system's <CODE>make</CODE> utility. That is because ActiveState uses Visual C++ to compile Perl.
+
+<P>
+If you want to use another compiler with <CODE>Inline</CODE>, you're on your own until I get a chance to play around. I would like to
+see this work the <STRONG>free</STRONG> Cygnus port of <CODE>gcc</CODE>. For more info see: <A
+HREF="http://sources.redhat.com/cygwin/">http://sources.redhat.com/cygwin/</A>
+
+
+<P>
+To install <CODE>Inline.pm</CODE> (or any other CPAN module) on MSWin32 w/ Visual C++, use these:
+
+<P>
+<PRE>    perl Makefile.PL
+    nmake
+    nmake test
+    nmake install
+</PRE>
+<P>
+If <CODE>Inline</CODE> works on your platform, please email me the info above. If it doesn't work,
+see <A HREF="#BUGS_AND_DEFICIENCIES">BUGS AND DEFICIENCIES</A> below.
 
 <P>
 <HR>
@@ -894,6 +929,13 @@ whether to add them or not. They're not very Perl-like IMO.
 While <CODE>Inline</CODE> does attempt to clean up after itself, there is currently no functionality
 to remove a shared object when a new version is compiled. This shouldn't be
 hard to do, but I want to think about it a little more. 
+
+<LI>
+<P>
+The compile time using Visual C++ on MSWin32 is an order of magnitude
+slower than on Unix. 30-40 seconds compared to 3-4 seconds, in my testing.
+During this time, your script will seem to hang. Just be patient. After
+compilation, the execution time is comparable.
 
 </OL>
 <P>
