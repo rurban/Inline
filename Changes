@@ -1,5 +1,17 @@
 Revision history for Perl extension Inline.
 
+0.31  Fri Jan 19 00:13:31 PST 2001
+	- Changed doc instances of 'C<Inline>' to 'Inline'.
+
+0.31  Sat Jan 13 11:49:14 PST 2001
+	- Reorganized the internal structure of the Inline DIRECTORY
+	- Shortened install path to .Inline/lib/auto/...
+        - Lengthened the build path to .Inline/build/...
+
+0.31  Sat Jan 13 11:18:22 PST 2001
+	- Changed BLIB option to DIRECTORY
+	- Changed default DIRECTORY from blib_I to _Inline or .Inline
+
 0.30  Fri Dec  8 02:00:17 PST 2000
 	- Major reworking of Inline.pm
 	Sweeping changes to:

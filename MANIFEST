@@ -8,7 +8,10 @@ C/grammar/Changes
 C/grammar/Makefile.PL
 C/grammar/grammar.pm
 C/grammar/test.pl
+C/t/aaa.t
 C/t/config.t
+C/t/typemap
+C/t/typemap.t
 Changes
 Inline-API.pod
 Inline-Support.pod
@@ -17,9 +20,12 @@ Inline.pod
 MANIFEST
 Makefile.PL
 README
-ToDo
 lib/Inline/messages.pm
 symbols.perl
+t/aaa.t
+t/create.t
+t/file
+t/file.t
 t/init.t
 t/perlapi.t
 t/syntax.t

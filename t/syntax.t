@@ -1,13 +1,13 @@
 use strict;
 use Test;
 BEGIN {
-    mkdir('./blib_test', 0777) unless -e './blib_test';
     plan(tests => 5, 
 	 todo => [],
 	 onfail => sub {},
 	);
 }
-use Inline Config => BLIB => './blib_test';
+use Inline Config => 
+           DIRECTORY => './_Inline_test';
 
 # test 1 - Check string syntax
 ok(add(3, 7) == 10);
@@ -18,7 +18,7 @@ ok(multiply(3, 7) == 21);
 # test 4 - Check DATA syntax again
 ok(divide(7, -3) == -2);
 
-use Inline C => 'DATA';
+use Inline 'C';
 use Inline C => 'DATA';
 use Inline C => <<'END_OF_C_CODE';
 

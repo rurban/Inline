@@ -1,14 +1,14 @@
 use strict;
 use Test;
 BEGIN {
-    mkdir('./blib_test', 0777) unless -e './blib_test';
     plan(tests => 1,
 	 todo => [],
 	 onfail => sub {},
 	);
 }
-use Inline Config => BLIB => './blib_test';
-use Inline C => 'DATA';
+use Inline Config => 
+           DIRECTORY => './_Inline_test';
+use Inline 'C';
 
 $main::myvar = $main::myvar = "myvalue";
 

@@ -1,6 +1,15 @@
 #==============================================================================
 # Various warnings and errors used by Inline.pm
 #==============================================================================
+sub error_old_version {
+    my ($config, $old_version) = @_;
+    my $error = <<END;
+You are attempting to use an Inline directory and config file that is too
+old for this version of Inline.pm. Please delete the directory and try again.
+END
+    return $error;
+}
+
 sub usage {
     my $usage = <<END;
 Invalid usage of Inline module. Valid usages are:
@@ -76,7 +85,7 @@ I currently only know about the following languages:
     ${\ join(', ', sort keys %Inline::config::languages)}
 
 If you have installed a support module for this language, try deleting the
-config file from your BLIB directory, and run again.
+config file from your Inline DIRECTORY, and run again.
 
 END
 }
@@ -157,10 +166,10 @@ Please consult the Inline documentation for more information.
 END
 }
 
-sub usage_BLIB {
+sub usage_DIRECTORY {
     my $value = shift;
     return <<END;
-Invalid value '$value' for config option BLIB
+Invalid value '$value' for config option DIRECTORY
 
 END
 }

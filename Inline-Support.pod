@@ -8,9 +8,9 @@ This document contains all of the latest support information for C<Inline.pm> an
 
 =head1 SUPPORTED LANGUAGES
 
-The most important language that C<Inline> supports is C. That is because Perl itself is written in C<C>. By giving a your Perl scripts access to C<C>, you in effect give them access to the entire glorious internals of Perl. (Caveat scriptor :-)
+The most important language that Inline supports is C. That is because Perl itself is written in C<C>. By giving a your Perl scripts access to C<C>, you in effect give them access to the entire glorious internals of Perl. (Caveat scriptor :-)
 
-As of this writing, C<Inline> also supports:
+As of this writing, Inline also supports:
 
  - C++
  - Python
@@ -75,17 +75,17 @@ To install C<Inline.pm> (or any other CPAN module) on MSWin32 w/ Visual C++, use
 
 The "Cygwin" test was done on a Windows 98 machine using the Cygwin Unix/Win32 porting layer software from Cygnus. The C<perl> binary on this machine was also compiled using the Cygwin tool set (C<gcc>). This software is freely available from http://sources.redhat.com/cygwin/
 
-If C<Inline> works on your platform, you can email me the info above. If it doesn't work, let me know as well and I'll see what can be done.
+If Inline works on your platform, you can email me the info above. If it doesn't work, let me know as well and I'll see what can be done.
 
 =head1 SEE ALSO
 
-For general information about C<Inline> see L<Inline>.
+For general information about Inline see L<Inline>.
 
-For information about using C<Inline> with C see L<Inline::C>.
+For information about using Inline with C see L<Inline::C>.
 
-For sample programs using C<Inline> with C see L<Inline::C-Cookbook>.
+For sample programs using Inline with C see L<Inline::C-Cookbook>.
 
-For information on writing your own C<Inline> Language Support Module, see L<Inline-API>.
+For information on writing your own Inline Language Support Module, see L<Inline-API>.
 
 Inline's mailing list is inline@perl.org
 
@@ -97,7 +97,7 @@ Brian Ingerson <INGY@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000, Brian Ingerson. 
+Copyright (c) 2001, Brian Ingerson. 
 
 All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
 

@@ -27,6 +27,16 @@ The one line version is:
 -------------------------------------------------------------------------------
 FEATURES:
 
+Inline version 0.31 is a minor upgrade with the following changes:
+
++ "use Inline C;" is now a synonym for "use Inline C => DATA;"
++ Default build/install directory changed from "blib_I/" to ".Inline/"
++ Build/Install directory structure simplified.
+  + Short install paths.
+  + Build areas in ".Inline/build/" subdirectory.
++ Added 'CC', 'CCFLAGS', 'LD', and 'LDFLAGS' config options to C.
++ More recipes in Cookbook.
+
 Inline version 0.30 is a major upgrade from previous verions. It includes:
 
 + Integrated support for typemap files in C.
@@ -109,4 +119,4 @@ inline-subscribe@perl.org to subscribe.
 
 Please send questions and comments to "Brian Ingerson" <INGY@cpan.org>
 
-Copyright (c) 2000, Brian Ingerson. All Rights Reserved.  
+Copyright (c) 2001, Brian Ingerson. All Rights Reserved.  

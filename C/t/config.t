@@ -1,13 +1,13 @@
 use strict;
 use Test;
 BEGIN {
-    mkdir('./blib_test', 0777) unless -e './blib_test';
     plan(tests => 3,
 	 todo => [],
 	 onfail => sub {},
 	);
 }
-use Inline Config => BLIB => './blib_test';
+use Inline Config => 
+           DIRECTORY => './_Inline_test';
 
 # test 1 - Make sure config options are type checked
 BEGIN {

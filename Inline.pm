@@ -2,7 +2,7 @@ package Inline;
 
 use strict;
 require 5.005;
-$Inline::VERSION = '0.30';
+$Inline::VERSION = '0.31';
 
 use Inline::messages;
 use Config;
@@ -29,7 +29,7 @@ my %shortcuts =
 
 my $default_config = 
   {
-   BLIB => '',
+   DIRECTORY => '',
    WITH => [],
    CLEAN_AFTER_BUILD => 1,
    CLEAN_BUILD_AREA => 0,
@@ -72,8 +72,7 @@ sub import {
     }
     elsif ($control =~ /^\S+$/ and $control !~ /\n/) {
 	my $language_id = $control;
-	my $option = shift
-	  or croak usage;
+	my $option = shift || '';
 	my %config = @_;
 	for (keys %config) {
 	    croak usage if /[\s\n]/;
@@ -84,7 +83,7 @@ sub import {
 		    script => $script,
 		    language_id => $language_id,
 		   }, $class;
-	if ($option eq 'DATA') {
+	if ($option eq 'DATA' or not $option) {
 	    $o->{config} = {%config};
 	    push @DATA_OBJS, $o;
 	    return;
@@ -153,7 +152,7 @@ sub bind {
 # This code is an ugly hack because of the fact that you can't use an 
 # INIT block at "run-time proper". So we kill the warning for 5.6+ users
 # and tell them to use a Inline->init() call if they run into problems. (rare)
-my $lexwarn = ($] >= 5.006) ? "no warnings;\n" : '';
+my $lexwarn = ($] >= 5.006) ? 'no warnings;' : '';
 
 eval <<END;
 $lexwarn
@@ -294,9 +293,9 @@ sub check_config {
     while (@_) {
 	my ($key, $value) = (shift, shift);
 	if (defined $ {$default_config}{$key}) {
-	    if ($key eq 'BLIB') {
+	    if ($key eq 'DIRECTORY') {
 		if ($value) {
-		    croak usage_BLIB($value)
+		    croak usage_DIRECTORY($value)
 		      unless (-d $value);
 		    $value = abs_path($value) . '/';
 		}
@@ -313,37 +312,37 @@ sub check_config {
 	    push @others, $key, $value;
 	}
     }
-    $o->{config}{BLIB} ||= $o->find_temp_dir;
+    $o->{config}{DIRECTORY} ||= $o->find_temp_dir;
     return (@others);
 }
 
 #==============================================================================
-# Read the cached config file from the BLIB directory. This will indicate
+# Read the cached config file from the Inline directory. This will indicate
 # whether the Language code is valid or not.
 #==============================================================================
 sub check_config_file {
-    my ($BLIB);
+    my ($DIRECTORY);
     my $o = shift;
     
     croak usage_Config if exists $main::{Config::};
 
-    # First make sure we have the BLIB
+    # First make sure we have the DIRECTORY
     if ($o->{config}{SITE_INSTALL}) {
 	my $cwd = Cwd::cwd();
-	$BLIB = $o->{config}{BLIB} = "$cwd/blib_I/";
-	if (not -d $BLIB) {
-	    mkdir($BLIB, 0777)
-	      or croak "Can't mkdir $BLIB to build Inline code.\n";
+	$DIRECTORY = $o->{config}{DIRECTORY} = "$cwd/_Inline/";
+	if (not -d $DIRECTORY) {
+	    mkdir($DIRECTORY, 0777)
+	      or croak "Can't mkdir $DIRECTORY to build Inline code.\n";
 	}
     }
     else {
-	$BLIB = $o->{config}{BLIB} ||= $o->find_temp_dir;
+	$DIRECTORY = $o->{config}{DIRECTORY} ||= $o->find_temp_dir;
     }
 
-    $o->create_config_file("$BLIB/config") if not -e "$BLIB/config";
+    $o->create_config_file("$DIRECTORY/config") if not -e "$DIRECTORY/config";
 
-    open CONFIG, "< $BLIB/config"
-      or croak "Can't open ${BLIB}config for input\n";
+    open CONFIG, "< $DIRECTORY/config"
+      or croak "Can't open ${DIRECTORY}config for input\n";
     my $config = join '', <CONFIG>;
     close CONFIG;
 
@@ -354,7 +353,10 @@ no strict;
 $config
 END
 
-    croak "Unable to parse ${BLIB}config\n$@\n" if $@;
+    croak error_old_version 
+      unless (defined $Inline::config::version and
+	      $Inline::config::version >= 0.31);
+    croak "Unable to parse ${DIRECTORY}config\n$@\n" if $@;
     croak usage_language($o->{language_id})
       unless defined $Inline::config::languages{$o->{language_id}};
     $o->{language} = $Inline::config::languages{$o->{language_id}};
@@ -425,6 +427,7 @@ sub create_config_file {
     
     open CONFIG, "> $file" or croak "Can't open $file for output\n";
     print CONFIG <<END;
+\$version = $Inline::VERSION;
 %languages = %{$languages};
 %types = %{$types};
 %modules = %{$modules};
@@ -454,7 +457,7 @@ sub with_configs {
 # Check to see if code has already been compiled
 #==============================================================================
 sub check_module {
-    my ($pkg, $id, $BLIB);
+    my ($pkg, $id, $DIRECTORY);
     my $o = shift;
 
     $pkg = $o->{pkg};
@@ -483,13 +486,13 @@ sub check_module {
     $o->{suffix} = $o->{ILSM_suffix};
     $o->{mod_exists} = 0;
 
-    $BLIB = $o->{config}{BLIB};
+    $DIRECTORY = $o->{config}{DIRECTORY};
 
     if ($o->{config}{SITE_INSTALL}) {
 	my $blib = Cwd::cwd() . "/blib";
 	croak "Invalid attempt to do SITE_INSTALL\n"
 	  unless (-d $blib and -w $blib);
-	$o->{build_dir} = $BLIB;
+	$o->{build_dir} = $DIRECTORY . 'build/' . $o->{modpname} . '/';
 	$o->{install_lib} = "$blib/arch/";
 	$o->{location} = 
 	  "$blib/arch/auto/$o->{modpname}/$o->{modfname}.$o->{suffix}";
@@ -503,16 +506,16 @@ sub check_module {
 	$o->{mod_exists} = 1;
 	if ($o->{config}{FORCE_BUILD} or
 	    $o->{config}{REPORTBUG}) {
-	    $o->{build_dir} = $BLIB . $o->{modpname} . '/';
-	    $o->{install_lib} = $BLIB . 'lib/perl5' . $o->get_install_suffix;
+	    $o->{build_dir} = $DIRECTORY . 'build/' . $o->{modpname} . '/';
+	    $o->{install_lib} = $DIRECTORY . 'lib';
 	    unshift @::INC, $o->{install_lib};
 	    $o->{location} =
 	      "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{suffix}"; 
 	}
     }
     else {
-	$o->{build_dir} = $BLIB . $o->{modpname} . '/';
-	$o->{install_lib} = $BLIB . 'lib/perl5' . $o->get_install_suffix;
+	$o->{build_dir} = $DIRECTORY . 'build/' . $o->{modpname} . '/';
+	$o->{install_lib} = $DIRECTORY . 'lib';
 	unshift @::INC, $o->{install_lib};
 	$o->{location} = 
 	  "$o->{install_lib}/auto/$o->{modpname}/$o->{modfname}.$o->{suffix}"; 
@@ -627,7 +630,7 @@ sub clean_build {
     my ($prefix, $dir);
     my $o = shift;
 
-    $prefix = $o->{config}{BLIB};
+    $prefix = $o->{config}{DIRECTORY};
     opendir(BUILD, $prefix)
       or die "Can't open build directory: $prefix for cleanup $!\n";
 
@@ -650,7 +653,7 @@ sub error_copy {
     my $o = shift;
     delete @{$o->{parser}}{grep {!/^data$/} keys %{$o->{parser}}};
     my $src_dir = $o->{build_dir};
-    my $new_dir = $o->{config}{BLIB} . "errors";
+    my $new_dir = $o->{config}{DIRECTORY} . "errors";
 
     File::Path::rmtree($new_dir);
     File::Path::mkpath($new_dir);
@@ -830,23 +833,7 @@ sub rmpath {
 }
 
 #==============================================================================
-# Find the latter part of the install path.
-#==============================================================================
-my $INSTALL_SUFFIX;
-sub get_install_suffix {
-    return $INSTALL_SUFFIX if $INSTALL_SUFFIX;
-    # MSWin32 needs abs_path
-    my $suffix = abs_path($Config::Config{sitearch});
-    $suffix =~ s|^.*(/site.*)$|$1| 
-      or croak <<'END';
-Can\'t parse your perl configuration to find an appropriate install suffix.
-Try setting INSTALL_SUFFIX yourself.
-END
-    return $INSTALL_SUFFIX = $suffix;
-}
-
-#==============================================================================
-# Find the temporary or 'BLIB' directory.
+# Find the 'Inline' directory to use.
 #==============================================================================
 my $TEMP_DIR;
 sub find_temp_dir {
@@ -854,7 +841,7 @@ sub find_temp_dir {
     
     my ($temp_dir, $home, $bin, $cwd, $env);
     $temp_dir = '';
-    $env = $ENV{PERL_INLINE_BLIB} || '';
+    $env = $ENV{PERL_INLINE_DIRECTORY} || '';
     $home = $ENV{HOME} ? abs_path($ENV{HOME}) : '';
     
     if ($env and
@@ -864,42 +851,44 @@ sub find_temp_dir {
     }
     elsif ($cwd = abs_path('.') and
 	   $cwd ne $home and
-	   -d "$cwd/blib_I/" and
-	   -w "$cwd/blib_I/") {
-	$temp_dir = "$cwd/blib_I/";
+	   -d "$cwd/.Inline/" and
+	   -w "$cwd/.Inline/") {
+	$temp_dir = "$cwd/.Inline/";
     }
     elsif ($bin = $FindBin::Bin and
-	   -d "$bin/blib_I/" and
-	   -w "$bin/blib_I/") {
-	$temp_dir = "$bin/blib_I/";
-    } 
-    elsif (-d "/tmp/blib_I/" and
-	   -w "/tmp/blib_I/") {
-	$temp_dir = "/tmp/blib_I/";
+	   -d "$bin/.Inline/" and
+	   -w "$bin/.Inline/") {
+	$temp_dir = "$bin/.Inline/";
     } 
     elsif ($home and
-	   -d "$home/blib_I/" and
-	   -w "$home/blib_I/") {
-	$temp_dir = "$home/blib_I/";
+	   -d "$home/.Inline/" and
+	   -w "$home/.Inline/") {
+	$temp_dir = "$home/.Inline/";
     } 
-    elsif ($home and
-	   -d "$home/.blib_I/" and
-	   -w "$home/.blib_I/") {
-	$temp_dir = "$home/.blib_I/";
+    elsif (defined $cwd and $cwd and
+	   -d "$cwd/_Inline/" and
+	   -w "$cwd/_Inline/") {
+	$temp_dir = "$cwd/_Inline/";
     }
-    elsif (defined $bin and
+    elsif (defined $bin and $bin and
+	   -d "$bin/_Inline/" and
+	   -w "$bin/_Inline/") {
+	$temp_dir = "$bin/_Inline/";
+    } 
+    elsif (defined $cwd and $cwd and
+	   -d $cwd and
+	   -w $cwd and
+	   mkdir("$cwd/_Inline/", 0777)) {
+	$temp_dir = "$cwd/_Inline/";
+    }
+    elsif (defined $bin and $bin and
 	   -d $bin and
 	   -w $bin and
-	   mkdir("$bin/blib_I/", 0777)) {
-	$temp_dir = "$bin/blib_I/";
-    }
-    elsif (-d $cwd and
-	   -w $cwd and
-	   mkdir("$cwd/blib_I/", 0777)) {
-	$temp_dir = "$cwd/blib_I/";
+	   mkdir("$bin/_Inline/", 0777)) {
+	$temp_dir = "$bin/_Inline/";
     }
 
-    croak "Couldn't find an appropriate temporary directory to build in\n"
+    croak "Couldn't find an appropriate DIRECTORY for Inline to use.\n"
       unless $temp_dir;
     return $TEMP_DIR = abs_path($temp_dir) . '/';
 }

@@ -1,4 +1,14 @@
 Revision history for Perl extension Inline::C.
 
+0.31  Thu Jan 18 22:02:17 PST 2001
+	- Added the following configuration options: 'CC', 'LD', 'CCFLAGS, 'LDFLAGS'. These are proxies for the MakeMaker options of the same names.
+
+0.31  Sat Jan 13 14:44:28 PST 2001
+	- Allow relative paths in TYPEMAPS files.
+	- Added a test 't/typemap.t' for this
+
+0.31  Sat Jan 13 12:41:38 PST 2001
+	- Changed over to new Inline DIRECTORY structure.
+
 0.30  Fri Dec  8 01:55:43 PST 2000
 	- Created Inline::C. Separated C code from Inline 0.26

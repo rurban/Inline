@@ -1,5 +1,6 @@
 use strict;
 use Test;
+
 BEGIN {
     plan(tests => 1, 
 	 todo => [],
@@ -7,21 +8,9 @@ BEGIN {
 	);
 }
 
-eval <<END;
-use Inline C => DATA => 
+use Inline C => './t/file',
            DIRECTORY => './_Inline_test';
-Inline->init;
+
 # test 1
+# Make sure that the syntax for reading external files works.
 ok(add(3, 7) == 10);
-
-END
-
-print "$@\nnot ok 1\n" if $@;
-
-__END__
-
-__C__
-
-int add(int x, int y) {
-    return x + y;
-}

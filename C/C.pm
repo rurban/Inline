@@ -8,9 +8,9 @@ use Config;
 use Data::Dumper;
 use FindBin;
 use Carp;
-use Cwd;
+use Cwd qw(cwd abs_path);
 
-$Inline::C::VERSION = '0.30';
+$Inline::C::VERSION = '0.31';
 @Inline::C::ISA = qw(Inline);
 
 #==============================================================================
@@ -51,19 +51,28 @@ END
 
     while (@_) {
 	my ($key, $value) = (shift, shift);
+	if ($key eq 'CC' or
+	    $key eq 'LD') {
+	    $o->{C}{MAKEFILE}{$key} = $value;
+	    next;
+	}
 	if ($key eq 'LIBS') {
 	    add_list($o->{C}{MAKEFILE}, $key, $value, []);
 	    next;
 	}
-	if ($key eq 'INC') {
-	    add_string($o->{C}{MAKEFILE}, $key, $value, '');
-	    next;
-	}
-	if ($key eq 'MYEXTLIB') {
+	if ($key eq 'INC' or
+	    $key eq 'MYEXTLIB' or
+	    $key eq 'CCFLAGS' or
+	    $key eq 'LDFLAGS') {
 	    add_string($o->{C}{MAKEFILE}, $key, $value, '');
 	    next;
 	}
 	if ($key eq 'TYPEMAPS') {
+	    croak "TYPEMAPS file '$value' not found"
+	      unless -f $value;
+	    my ($path, $file) = ($value =~ m|^(.*)[/\\](.*)$|) ?
+	      ($1, $2) : ('.', $value);
+	    $value = abs_path($path) . '/' . $file;
 	    add_list($o->{C}{MAKEFILE}, $key, $value, []);
 	    next;
 	}
@@ -82,16 +91,6 @@ END
 	    $o->{C}{XS}{PREFIX} = $value;
 	    next;
 	}
-#	if ($key eq 'MANGLE') {
-#	    $value = '' unless $value;
-#	    $value = 'Inline_' if $value eq '1';
-#	    croak "Invalid value for 'MANGLE' option"
-#	      unless ($value =~ /^\w*$/ and
-#		      $value !~ /\n/);
-#	    $o->{C}{XS}{MANGLE} = $value;
-#	    $o->{C}{XS}{PREFIX} = $value;
-#	    next;
-#	}
 	croak "'$key' is not a valid config option for Inline::C\n";
     }
 }
@@ -517,7 +516,7 @@ END
     if ($o->{config}{CLEAN_AFTER_BUILD} and 
 	not $o->{config}{REPORTBUG}
        ) {
-	$o->rmpath($o->{config}{BLIB}, $modpname);
+	$o->rmpath($o->{config}{DIRECTORY} . 'build/', $modpname);
 	unlink "$install_lib/auto/$modpname/.packlist";
 	unlink "$install_lib/auto/$modpname/$modfname.bs";
 	unlink "$install_lib/auto/$modpname/$modfname.exp"; #MSWin32 VC++

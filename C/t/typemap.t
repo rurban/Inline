@@ -1,0 +1,23 @@
+use strict;
+use Test;
+
+plan(tests => 1,
+     todo => [],
+     onfail => sub {},
+    );
+
+
+use Inline C => DATA =>
+           DIRECTORY => './_Inline_test',
+           TYPEMAPS => './t/typemap';
+
+# test 1
+ok(int((add_em_up(1.2, 3.4) + 0.001) * 10) == 46);
+
+__END__
+
+__C__
+
+float add_em_up(float x, float y) {
+    return x + y;
+}

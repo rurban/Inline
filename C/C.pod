@@ -4,9 +4,9 @@ Inline::C - Write Perl Subroutines in C
 
 =head1 DESCRIPTION
 
-C<Inline::C> is a module that allows you to write Perl subroutines in C. Since version 0.30 the C<Inline> module supports multiple programming languages and eeach language has its own support module. This document describes how to use C<Inline> with the C programming language. It also goes a bit into Perl C internals.
+C<Inline::C> is a module that allows you to write Perl subroutines in C. Since version 0.30 the Inline module supports multiple programming languages and eeach language has its own support module. This document describes how to use Inline with the C programming language. It also goes a bit into Perl C internals.
 
-If you want to start working with programming examples right away, check out L<Inline::C-Cookbook>. For more information on C<Inline> in general, see L<Inline>.
+If you want to start working with programming examples right away, check out L<Inline::C-Cookbook>. For more information on Inline in general, see L<Inline>.
 
 =head1 Usage
 
@@ -20,9 +20,9 @@ or
 
 =head1 Function Definitions
 
-The C<Inline> grammar for C recognizes certain function definitions (or signatures) in your C code. If a signature is recognized by C<Inline>, then it will be available in Perl-space. That is, C<Inline> will generate the "glue" necessary to call that function as if it were a Perl subroutine. If the signature is not recognized, C<Inline> will simply ignore it, with no complaints. It will not be available from Perl-space, although it I<will> be available from C-space.
+The Inline grammar for C recognizes certain function definitions (or signatures) in your C code. If a signature is recognized by Inline, then it will be available in Perl-space. That is, Inline will generate the "glue" necessary to call that function as if it were a Perl subroutine. If the signature is not recognized, Inline will simply ignore it, with no complaints. It will not be available from Perl-space, although it I<will> be available from C-space.
 
-C<Inline> looks for ANSI/prototype style function definitions. They must be of the form:
+Inline looks for ANSI/prototype style function definitions. They must be of the form:
 
     return-type function-name ( type-name-pairs ) { ... }
 
@@ -41,11 +41,11 @@ The following definitions would not be recognized:
     int Foo(num, str) double num; char* str; {
     void Foo(void) {           # void only valid for return type
 
-Notice that C<Inline> only looks for function I<definitions>, not function I<prototypes>. Definitions are the syntax directly preceeding a function body. Also C<Inline> does not scan external files, like headers. Only the code passed to C<Inline> is used to create bindings; although other libraries can linked in, and called from C-space.
+Notice that Inline only looks for function I<definitions>, not function I<prototypes>. Definitions are the syntax directly preceeding a function body. Also Inline does not scan external files, like headers. Only the code passed to Inline is used to create bindings; although other libraries can linked in, and called from C-space.
 
 =head1 C Configuration Options
 
-For information on how to specify C<Inline> configuration options, see L<Inline>. This section describes each of the configuration options available for C. Most of the options correspond either to MakeMaker or XS options of the same name. See L<ExtUtils::MakeMaker> and L<perlxs>.
+For information on how to specify Inline configuration options, see L<Inline>. This section describes each of the configuration options available for C. Most of the options correspond either to MakeMaker or XS options of the same name. See L<ExtUtils::MakeMaker> and L<perlxs>.
 
 =head2 LIBS
 
@@ -101,7 +101,7 @@ The B<Stack> is an array of scalars known internally as C<SV>'s. The B<Stack> is
 
 So back to variable mapping. XS uses a thing known as "typemaps" to turn each C<SV*> into a C<C> type and back again. This is done through various XS macro calls, casts and the Perl API. See C<perldoc perlapi>. XS allows you to define your own typemaps as well for fancier non-standard types such as C<typedef>-ed structs.
 
-C<Inline> uses the default Perl typemap file for its default types. It parses your code for these types and generates the XS code to map them. The most commonly used types are:
+Inline uses the default Perl typemap file for its default types. It parses your code for these types and generates the XS code to map them. The most commonly used types are:
 
  - int
  - long
@@ -112,7 +112,7 @@ C<Inline> uses the default Perl typemap file for its default types. It parses yo
 
 If you need to deal with anything fancier, just use the generic C<SV*> type in the function definition. Then inside your code, do the mapping yourself. Alternatively, you can create your own typemap files and specify them using the C<TYPEMAPS> configuration option.
 
-A return type of C<void> has a special meaning to C<Inline>. It means that you plan to push the values back onto the B<Stack> yourself. This is what you need to do to return a list of values. If you really don't want to return anything (the traditional meaning of C<void>) then simply don't push anything back.
+A return type of C<void> has a special meaning to Inline. It means that you plan to push the values back onto the B<Stack> yourself. This is what you need to do to return a list of values. If you really don't want to return anything (the traditional meaning of C<void>) then simply don't push anything back.
 
 If ellipsis or C<...> is used at the end of an argument list, it means that any number of C<SV*>s may follow. Again you will need to pop the values off of the C<Stack> yourself.
 
@@ -120,7 +120,7 @@ See L<"Examples"> below.
 
 =head1 The Inline Stack Macros
 
-When you write C<Inline> C, the following lines are automatically prepended to your code (by default):
+When you write Inline C, the following lines are automatically prepended to your code (by default):
 
     #include "EXTERN.h"
     #include "perl.h"
@@ -193,7 +193,7 @@ This is the simplest case. You have a non C<void> return type and a fixed length
 
     void Foo(int arg1, char* arg2, SV* arg3) {
 
-In this category you have a C<void> return type. This means that either you want to return nothing, or that you want to return a list. In the latter case you'll need to push values onto the B<Stack> yourself. There are a few C<Inline> macros that make this easy. Code something like this:
+In this category you have a C<void> return type. This means that either you want to return nothing, or that you want to return a list. In the latter case you'll need to push values onto the B<Stack> yourself. There are a few Inline macros that make this easy. Code something like this:
 
     int i, max; SV* my_sv[10];
     Inline_Stack_Vars;
@@ -282,13 +282,13 @@ We can fix the problem in Example #2 by using the C<SvPV> function instead. This
 
 =head1 SEE ALSO
 
-For general information about C<Inline> see L<Inline>.
+For general information about Inline see L<Inline>.
 
-For sample programs using C<Inline> with C see L<Inline::C-Cookbook>.
+For sample programs using Inline with C see L<Inline::C-Cookbook>.
 
 For information on supported languages and platforms see L<Inline-Support>.
 
-For information on writing your own C<Inline> Language Support Module, see L<Inline-API>.
+For information on writing your own Inline Language Support Module, see L<Inline-API>.
 
 Inline's mailing list is inline@perl.org
 
@@ -300,7 +300,7 @@ Brian Ingerson <INGY@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000, Brian Ingerson. All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
+Copyright (c) 2001, Brian Ingerson. All Rights Reserved.  This module is free software. It may be used, redistributed and/or modified under the terms of the Perl Artistic License.
 
 See http://www.perl.com/perl/misc/Artistic.html
 
