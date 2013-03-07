@@ -50,19 +50,22 @@ valid function definitions.
 
     int Foo(double num, char* str) {
     void Foo(double num, char* str) {
-    SV* Foo() {
     void Foo(SV*, ...) {
     long Foo(int i, int j, ...) {
+    SV* Foo(void) { # 'void' arg invalid with the ParseRecDescent parser.
+                    # Works only with the ParseRegExp parser.
+                    # See the section on USING (below).
+    SV* Foo() {  # Alternative to specifying 'void' arg. Is valid with
+                 # both the ParseRecDescent and ParseRegExp parsers.
 
 The following definitions would not be recognized:
 
     Foo(int i) {               # no return type
     int Foo(float f) {         # no (default) typemap for float
     int Foo(num, str) double num; char* str; {
-    void Foo(void) {           # void only valid for return type
 
 Notice that Inline only looks for function I<definitions>, not function
-I<prototypes>. Definitions are the syntax directly preceeding a function
+I<prototypes>. Definitions are the syntax directly preceding a function
 body. Also Inline does not scan external files, like headers. Only the
 code passed to Inline is used to create bindings; although other
 libraries can linked in, and called from C-space.
@@ -103,7 +106,22 @@ Specify which compiler to use.
 
 =head2 CCFLAGS
 
-Specify extra compiler flags.
+Specify compiler flags - same as ExtUtils::MakeMaker's CCFLAGS option.
+Whatever gets specified here replaces the default $Config{ccflags}.
+Often, you'll want to add an extra flag or two without
+clobbering the default flags in which case you could
+instead use CCFLAGSEX (see below) or, iff Config.pm has already
+been loaded:
+
+  use Inline C => Config => CCFLAGS => $Config{ccflags} . " -DXTRA -DTOO";
+
+=head2 CCFLAGSEX
+
+Extend compiler flags.
+Sets CCFLAGS to $Config{ccflags} followed by a space, followed by
+the specified value:
+
+  use Inline C => Config => CCFLAGSEX => "-DXTRA -DTOO";
 
 =head2 FILTERS
 
@@ -127,6 +145,7 @@ more information.
 =head2 INC
 
 Specifies an include path to use. Corresponds to the MakeMaker parameter.
+Expects a fully qualified path.
 
     use Inline C => Config => INC => '-I/inc/path';
 
@@ -136,9 +155,9 @@ Specify which linker to use.
 
 =head2 LDDLFLAGS
 
-Specify which linker flags to use. 
+Specify which linker flags to use.
 
-NOTE: 
+NOTE:
 These flags will completely override the existing flags, instead of
 just adding to them. So if you need to use those too, you must
 respecify them here.
@@ -147,10 +166,12 @@ respecify them here.
 
 Specifies external libraries that should be linked into your code.
 Corresponds to the MakeMaker parameter.
+Provide a fully qualified path with the -L switch if the library is
+in a location where it won't be found automatically.
 
     use Inline C => Config => LIBS => '-lyourlib';
 
-or 
+or
 
     use Inline C => Config => LIBS => '-L/your/path -lyourlib';
 
@@ -162,6 +183,7 @@ Specify the name of the 'make' utility to use.
 
 Specifies a user compiled object that should be linked in. Corresponds
 to the MakeMaker parameter.
+Expects a fully qualified path.
 
     use Inline C => Config => MYEXTLIB => '/your/path/yourmodule.so';
 
@@ -182,12 +204,34 @@ parameter.
 
     use Inline C => Config => PREFIX => 'ZLIB_';
 
+=head2 PRE_HEAD
+
+Specifies code that will precede the inclusion of all files specified
+in AUTO_INCLUDE (ie EXTERN.h, perl.h, XSUB.h, INLINE.h and anything else
+that might have been added to AUTO_INCLUDE by the user). If the specified
+value identifies a file, the contents of that file will be inserted,
+otherwise the specified value is inserted.
+
+  use Inline C => Config => PRE_HEAD => $code_or_filename;
+
 =head2 TYPEMAPS
 
 Specifies extra typemap files to use. These types will modify the
 behaviour of the C parsing. Corresponds to the MakeMaker parameter.
+Specify either a fully qualified path or a path relative to the cwd
+(ie relative to what the cwd is at the time the script is loaded).
 
     use Inline C => Config => TYPEMAPS => '/your/path/typemap';
+
+=head2 USING
+
+Specifies which parser to use. Default is 'ParseRecDescent', which
+uses the Parse::RecDescent module. The only other option is
+'ParseRegExp', which uses the Inline::C::ParseRegExp module that ships
+with Inline.
+
+
+    use Inline C => Config => USING => 'ParseRegExp';
 
 =head1 C-Perl Bindings
 
@@ -269,7 +313,7 @@ few local variables: C<sp>, C<items>, C<ax> and C<mark>, for use by the
 other macros. It's not important to know what they do, but I mention
 them to avoid possible name conflicts.
 
-NOTE: 
+NOTE:
 Since this macro declares variables, you'll need to put it with your
 other variable declarations at the top of your function. It must
 come before any executable statements and before any other
@@ -308,7 +352,7 @@ anything. Same as:
 
     Inline_Stack_Return(0);
 
-Please note that this macro actually B<returns> from your function. 
+Please note that this macro actually B<returns> from your function.
 
 =back
 
@@ -415,7 +459,7 @@ standard C header files for you.
     use Inline C;
     greet('Ingy');
     greet(42);
-    __END__    
+    __END__
     __C__
     void greet(char* name) {
       printf("Hello %s!\n", name);
@@ -437,7 +481,7 @@ guts of Perl.
     use Inline C;
     greet('Ingy');
     greet(42);
-    __END__    
+    __END__
     __C__
     void greet(SV* sv_name) {
       printf("Hello %s!\n", SvPVX(sv_name));
@@ -498,7 +542,9 @@ Sisyphus <sisyphus@cpan.org> fixed some bugs and is current co-maintainer.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000, 2001, 2002. Brian Ingerson. All rights reserved.
+Copyright (c) 2000-2002. Brian Ingerson.
+
+Copyright (c) 2008, 2010-2012. Sisyphus.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

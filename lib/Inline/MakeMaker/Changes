@@ -1,6 +1,68 @@
 Revision history for Perl extension Inline::MakeMaker.
 
 ---
+version 0.52
+date     Thurs 07 Mar 2013
+         version 0.52 released to CPAN
+
+---
+version 0.51_03
+date:    Wed 28 Nov 2012
+         Version 0.51_03 released to CPAN.
+
+---
+version 0.51_02
+date:    Tues 20 Nov 2012
+         Version 0.51_02 released to CPAN.
+
+---
+version 0.51_01
+date:    Tues 20 Nov 2012
+         Version 0.51_01 released to CPAN.
+
+---
+version 0.51
+date:    Sat 13 Oct 2012
+         Version 0.51 released to CPAN.
+
+---
+version 0.50_03
+date:    Mon 8 Oct 2012
+         Version 0.50_03 released to CPAN.
+
+---
+version 0.50_02
+date:    Thur 24 May 2012
+         Version 0.50_02 released to CPAN.
+
+---
+version: 0.50_02
+date:    Tues 14 Feb 2012
+         MakeMaker.pm - Bump version number to 0.50_02
+
+---
+version: 0.50_01
+date:    Sun 12 Feb 2012
+         Version 0.50_01 released to CPAN.
+
+---
+version: 0.50_01
+date:    Wed 8 Feb 2012
+         Makemaker.pm - Bump version number to 0.50_01
+
+---
+version: 0.50
+date:    Tues 7 Feb 2012
+         Version 0.50 released to CPAN
+         Makemaker.pm - Bump version number to 0.50
+
+---
+version: 0.49_02
+date:    Fri 3 Feb 2012
+  - Bring version numbering into line with recommendations made in
+    http://perldoc.perl.org/perlmodstyle.html#Version-numbering
+
+---
 version: 0.44
 date:    Tue Oct  8 11:54:10 PDT 2002
 changes:

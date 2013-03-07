@@ -1,5 +1,6 @@
 package Inline::C;
-$VERSION = '0.45';
+$Inline::C::VERSION = '0.52';
+$Inline::C::VERSION = eval $Inline::C::VERSION;
 
 use strict;
 require Inline;
@@ -18,7 +19,7 @@ sub register {
     return {
 	    language => 'C',
             # XXX Breaking this on purpose; let's see who screams
-            # aliases => ['c'], 
+            # aliases => ['c'],
 	    type => 'compiled',
 	    suffix => $Config{dlext},
 	   };
@@ -38,12 +39,13 @@ END
 sub validate {
     my $o = shift;
 
+    print STDERR "validate Stage\n" if $o->{CONFIG}{BUILD_NOISY};
     $o->{ILSM} ||= {};
     $o->{ILSM}{XS} ||= {};
     $o->{ILSM}{MAKEFILE} ||= {};
     if (not $o->UNTAINT) {
 	require FindBin;
-	$o->{ILSM}{MAKEFILE}{INC} = "-I$FindBin::Bin";
+	$o->{ILSM}{MAKEFILE}{INC} = "-I\"$FindBin::Bin\"";
     }
     $o->{ILSM}{AUTOWRAP} = 0 if not defined $o->{ILSM}{AUTOWRAP};
     $o->{ILSM}{XSMODE} = 0 if not defined $o->{ILSM}{XSMODE};
@@ -57,12 +59,25 @@ END
     $o->{STRUCT} ||= {
 		      '.macros' => '',
 		      '.xs' => '',
-		      '.any' => 0, 
+		      '.any' => 0,
 		      '.all' => 0,
 		     };
 
     while (@_) {
 	my ($key, $value) = (shift, shift);
+      if ($key eq 'PRE_HEAD') {
+         unless( -f $value) {
+           $o->{ILSM}{AUTO_INCLUDE} = $value . "\n" . $o->{ILSM}{AUTO_INCLUDE};
+         }
+         else {
+           my $insert;
+           open RD, '<', $value or die "Couldn't open $value for reading: $!";
+           while(<RD>) {$insert .= $_}
+           close RD or die "Couldn't close $value after reading: $!";
+           $o->{ILSM}{AUTO_INCLUDE} = $insert . "\n" . $o->{ILSM}{AUTO_INCLUDE};
+         }
+         next;
+      }
 	if ($key eq 'MAKE' or
 	    $key eq 'AUTOWRAP' or
             $key eq 'XSMODE'
@@ -79,14 +94,21 @@ END
 	    $o->add_list($o->{ILSM}{MAKEFILE}, $key, $value, []);
 	    next;
 	}
-	if ($key eq 'INC' or
-	    $key eq 'MYEXTLIB' or
+	if ($key eq 'INC') {
+	    $o->add_string($o->{ILSM}{MAKEFILE}, $key, quote_space($value), '');
+	    next;
+	}
+	if ($key eq 'MYEXTLIB' or
 	    $key eq 'OPTIMIZE' or
 	    $key eq 'CCFLAGS' or
 	    $key eq 'LDDLFLAGS') {
 	    $o->add_string($o->{ILSM}{MAKEFILE}, $key, $value, '');
 	    next;
 	}
+      if ($key eq 'CCFLAGSEX') {
+	    $o->add_string($o->{ILSM}{MAKEFILE}, 'CCFLAGS', $Config{ccflags} . ' ' . $value, '');
+          next;
+      }
 	if ($key eq 'TYPEMAPS') {
           unless(ref($value) eq 'ARRAY') {
 	      croak "TYPEMAPS file '$value' not found"
@@ -94,14 +116,14 @@ END
 	      $value = File::Spec->rel2abs($value);
           }
           else {
-          for (my $i = 0; $i < scalar(@$value); $i++) {
+            for (my $i = 0; $i < scalar(@$value); $i++) {
 	      croak "TYPEMAPS file '${$value}[$i]' not found"
 	        unless -f ${$value}[$i];
-            ${$value}[$i] = File::Spec->rel2abs(${$value}[$i]);
+              ${$value}[$i] = File::Spec->rel2abs(${$value}[$i]);
             }
           }
-	    $o->add_list($o->{ILSM}{MAKEFILE}, $key, $value, []);
-	    next;
+	  $o->add_list($o->{ILSM}{MAKEFILE}, $key, $value, []);
+	  next;
 	}
 	if ($key eq 'AUTO_INCLUDE') {
 	    $o->add_text($o->{ILSM}, $key, $value, '');
@@ -133,7 +155,7 @@ END
 		    %filters = Inline::Filters::get_filters($o->{API}{language})
 		      unless keys %filters;
 		    if (defined $filters{$val}) {
-			my $filter = Inline::Filters->new($val, 
+			my $filter = Inline::Filters->new($val,
 							  $filters{$val});
 			$o->add_list($o->{ILSM}, $key, $filter, []);
 		    }
@@ -280,24 +302,24 @@ sub build {
 
 sub call {
     my ($o, $method, $header, $indent) = (@_, 0);
-    my $time; 
+    my $time;
     my $i = ' ' x $indent;
     print STDERR "${i}Starting $header Stage\n" if $o->{CONFIG}{BUILD_NOISY};
-    $time = Time::HiRes::time() 
+    $time = Time::HiRes::time()
       if $o->{CONFIG}{BUILD_TIMERS};
-    
+
     $o->$method();
 
-    $time = Time::HiRes::time() - $time 
+    $time = Time::HiRes::time() - $time
       if $o->{CONFIG}{BUILD_TIMERS};
     print STDERR "${i}Finished $header Stage\n" if $o->{CONFIG}{BUILD_NOISY};
-    printf STDERR "${i}Time for $header Stage: %5.4f secs\n", $time 
+    printf STDERR "${i}Time for $header Stage: %5.4f secs\n", $time
       if $o->{CONFIG}{BUILD_TIMERS};
     print STDERR "\n" if $o->{CONFIG}{BUILD_NOISY};
 }
 
 #==============================================================================
-# Apply any 
+# Apply any
 #==============================================================================
 sub preprocess {
     my $o = shift;
@@ -327,6 +349,7 @@ END
 # Create and initialize a parser
 sub get_parser {
     my $o = shift;
+    Inline::C::_parser_test("Inline::C::get_parser called\n") if $o->{CONFIG}{_TESTING};
     require Inline::C::ParseRecDescent;
     Inline::C::ParseRecDescent::get_parser($o);
 }
@@ -337,6 +360,7 @@ sub get_parser {
 sub get_maps {
     my $o = shift;
 
+    print STDERR "get_maps Stage\n" if $o->{CONFIG}{BUILD_NOISY};
     my $typemap = '';
     my $file;
     $file = File::Spec->catfile($Config::Config{installprivlib},"ExtUtils","typemap");
@@ -352,7 +376,9 @@ sub get_maps {
     if (not $o->UNTAINT) {
 	require FindBin;
 	$file = File::Spec->catfile($FindBin::Bin,"typemap");
-	push(@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}, $file) if -f $file;
+        if ( -f $file ) {
+	   push(@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}, $file);
+        }
     }
 }
 
@@ -363,23 +389,24 @@ sub get_maps {
 sub get_types {
     my (%type_kind, %proto_letter, %input_expr, %output_expr);
     my $o = shift;
+    local $_;
     croak "No typemaps specified for Inline C code"
       unless @{$o->{ILSM}{MAKEFILE}{TYPEMAPS}};
-    
+
     my $proto_re = "[" . quotemeta('\$%&*@;') . "]";
     foreach my $typemap (@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}) {
 	next unless -e $typemap;
 	# skip directories, binary files etc.
-	warn("Warning: ignoring non-text typemap file '$typemap'\n"), next 
+	warn("Warning: ignoring non-text typemap file '$typemap'\n"), next
 	  unless -T $typemap;
-	open(TYPEMAP, $typemap) 
+	open(TYPEMAP, $typemap)
 	  or warn ("Warning: could not open typemap file '$typemap': $!\n"), next;
 	my $mode = 'Typemap';
 	my $junk = "";
 	my $current = \$junk;
 	while (<TYPEMAP>) {
 	    next if /^\s*\#/;
-	    my $line_no = $. + 1; 
+	    my $line_no = $. + 1;
 	    if (/^INPUT\s*$/)   {$mode = 'Input';   $current = \$junk;  next}
 	    if (/^OUTPUT\s*$/)  {$mode = 'Output';  $current = \$junk;  next}
 	    if (/^TYPEMAP\s*$/) {$mode = 'Typemap'; $current = \$junk;  next}
@@ -389,14 +416,14 @@ sub get_types {
 		TrimWhitespace($_);
 		# skip blank lines and comment lines
 		next if /^$/ or /^\#/;
-		my ($type,$kind, $proto) = 
+		my ($type,$kind, $proto) =
 		  /^\s*(.*?\S)\s+(\S+)\s*($proto_re*)\s*$/ or
 		    warn("Warning: File '$typemap' Line $. '$line' TYPEMAP entry needs 2 or 3 columns\n"), next;
 		$type = TidyType($type);
 		$type_kind{$type} = $kind;
 		# prototype defaults to '$'
 		$proto = "\$" unless $proto;
-		warn("Warning: File '$typemap' Line $. '$line' Invalid prototype '$proto'\n") 
+		warn("Warning: File '$typemap' Line $. '$line' Invalid prototype '$proto'\n")
 		  unless ValidProtoString($proto);
 		$proto_letter{$type} = C_string($proto);
 	    }
@@ -417,12 +444,12 @@ sub get_types {
 	close(TYPEMAP);
     }
 
-    my %valid_types = 
+    my %valid_types =
       map {($_, 1)}
     grep {defined $input_expr{$type_kind{$_}}}
     keys %type_kind;
 
-    my %valid_rtypes = 
+    my %valid_rtypes =
       map {($_, 1)}
     (grep {defined $output_expr{$type_kind{$_}}}
     keys %type_kind), 'void';
@@ -534,6 +561,20 @@ END
 
 sub xs_bindings {
     my $o = shift;
+    my $dir = '_Inline_test';
+
+    if($o->{CONFIG}{_TESTING}) {
+      if(! -d $dir) {
+        my $ok = mkdir $dir;
+        warn $! if !$ok;
+      }
+
+      if(! -f "$dir/void_test") {
+        warn $! if !open(TEST_FH, '>', "$dir/void_test");
+        warn $! if !close(TEST_FH);
+      }
+    }
+
     my ($pkg, $module) = @{$o->{API}}{qw(pkg module)};
     my $prefix = (($o->{ILSM}{XS}{PREFIX}) ?
 		  "PREFIX = $o->{ILSM}{XS}{PREFIX}" :
@@ -558,7 +599,7 @@ END
 	my @arg_names = @{$data->{function}->{$function}->{arg_names}};
 	my @arg_types = @{$data->{function}->{$function}->{arg_types}};
 
-	$XS .= join '', ("\n$return_type\n$function (", 
+	$XS .= join '', ("\n$return_type\n$function (",
 		  join(', ', @arg_names), ")\n");
 
 	for my $arg_name (@arg_names) {
@@ -568,11 +609,33 @@ END
 	}
 
 	my $listargs = '';
-	$listargs = pop @arg_names if (@arg_names and 
+	$listargs = pop @arg_names if (@arg_names and
 				       $arg_names[-1] eq '...');
 	my $arg_name_list = join(', ', @arg_names);
 
 	if ($return_type eq 'void') {
+	if($o->{CONFIG}{_TESTING}) {
+      $XS .= <<END;
+	PREINIT:
+	PerlIO* stream;
+	I32* temp;
+	PPCODE:
+	temp = PL_markstack_ptr++;
+	$function($arg_name_list);
+      stream = PerlIO_open(\"$dir/void_test\", \"a\");
+      if(stream == NULL) warn(\"%s\\n\", \"Unable to open $dir/void_test for appending\");
+	if (PL_markstack_ptr != temp) {
+	  PerlIO_printf(stream, \"%s\\n\", \"TRULY_VOID\");
+	  PerlIO_close(stream);
+	  PL_markstack_ptr = temp;
+	  XSRETURN_EMPTY; /* return empty stack */
+        }
+	PerlIO_printf(stream, \"%s\\n\", \"LIST_CONTEXT\");
+	PerlIO_close(stream);
+	return; /* assume stack size is correct */
+END
+	  }
+	  else {
 	    $XS .= <<END;
 	PREINIT:
 	I32* temp;
@@ -587,6 +650,7 @@ END
         /* must have used dXSARGS; list context implied */
 	return; /* assume stack size is correct */
 END
+	  }
 	}
 	elsif ($listargs) {
 	    $XS .= <<END;
@@ -652,8 +716,10 @@ END
 sub write_Makefile_PL {
     my $o = shift;
     $o->{ILSM}{xsubppargs} = '';
+    my $i = 0;
     for (@{$o->{ILSM}{MAKEFILE}{TYPEMAPS}}) {
-	$o->{ILSM}{xsubppargs} .= "-typemap $_ ";
+	$o->{ILSM}{xsubppargs} .= "-typemap \"$_\" ";
+        $o->{ILSM}{MAKEFILE}{TYPEMAPS}->[$i++] = fix_space($_);
     }
 
     my %options = (
@@ -661,13 +727,13 @@ sub write_Makefile_PL {
 		   %{$o->{ILSM}{MAKEFILE}},
 		   NAME => $o->{API}{module},
 		  );
-    
+
     open MF, "> ".File::Spec->catfile($o->{API}{build_dir},"Makefile.PL")
       or croak;
-    
+
     print MF <<END;
 use ExtUtils::MakeMaker;
-my %options = %\{       
+my %options = %\{
 END
 
     local $Data::Dumper::Terse = 1;
@@ -693,12 +759,17 @@ sub compile {
     my $build_dir = $o->{API}{build_dir};
     my $cwd = &cwd;
     ($cwd) = $cwd =~ /(.*)/ if $o->UNTAINT;
-    
+
     chdir $build_dir;
-    $o->call('makefile_pl', '"perl Makefile.PL"', 2);
-    $o->call('make', '"make"', 2);
-    $o->call('make_install', '"make install"', 2);
+    # Run these in an eval block, so that we get to chdir back to
+    # $cwd if there's a failure. (Ticket #81375.)
+    eval {
+      $o->call('makefile_pl', '"perl Makefile.PL"', 2);
+      $o->call('make', '"make"', 2);
+      $o->call('make_install', '"make install"', 2);
+    };
     chdir $cwd;
+    die if $@; #Die now that we've done the chdir back to $cwd. (#81375)
     $o->call('cleanup', 'Cleaning Up', 2);
 }
 
@@ -725,7 +796,7 @@ sub make_install {
 }
 sub cleanup {
     my ($o) = @_;
-    my ($modpname, $modfname, $install_lib) = 
+    my ($modpname, $modfname, $install_lib) =
       @{$o->{API}}{qw(modpname modfname install_lib)};
     if ($o->{API}{cleanup}) {
         $o->rmpath(File::Spec->catdir($o->{API}{directory},'build'),
@@ -741,7 +812,7 @@ sub cleanup {
 
 sub system_call {
     my ($o, $cmd, $output_file) = @_;
-    my $build_noisy = 
+    my $build_noisy =
       defined $ENV{PERL_INLINE_BUILD_NOISY}
       ? $ENV{PERL_INLINE_BUILD_NOISY}
       : $o->{CONFIG}{BUILD_NOISY};
@@ -749,7 +820,7 @@ sub system_call {
         $cmd = "$cmd > $output_file 2>&1";
     }
     ($cmd) = $cmd =~ /(.*)/ if $o->UNTAINT;
-    system($cmd) == 0 
+    system($cmd) == 0
       or croak($o->build_error_message($cmd, $output_file, $build_noisy));
 }
 
@@ -764,7 +835,7 @@ sub build_error_message {
         $output = <OUTPUT>;
         close OUTPUT;
     }
-    
+
     return $output . <<END;
 
 A problem was encountered while attempting to compile and install your Inline
@@ -793,28 +864,139 @@ sub fix_make {
     use strict;
     my (@lines, $fix);
     my $o = shift;
-    
+
     $o->{ILSM}{install_lib} = $o->{API}{install_lib};
     $o->{ILSM}{installdirs} = 'site';
-    
+
     open(MAKEFILE, '< Makefile')
       or croak "Can't open Makefile for input: $!\n";
     @lines = <MAKEFILE>;
     close MAKEFILE;
-    
+
     open(MAKEFILE, '> Makefile')
       or croak "Can't open Makefile for output: $!\n";
     for (@lines) {
 	if (/^(\w+)\s*=\s*\S+.*$/ and
 	    $fix = $fixes{$1}
 	   ) {
-	    print MAKEFILE "$1 = $o->{ILSM}{$fix}\n"
+	    my $fixed = $o->{ILSM}{$fix};
+	    $fixed = fix_space($fixed) if $fix eq 'install_lib';
+	    print MAKEFILE "$1 = $fixed\n";
 	}
 	else {
 	    print MAKEFILE;
 	}
     }
     close MAKEFILE;
+}
+
+sub quote_space {
+
+  # Do nothing if $ENV{NO_INSANE_DIRNAMES} is set
+  return $_[0] if $ENV{NO_INSANE_DIRNAMES};
+
+  # If $_[0] contains one or more doublequote characters, assume
+  # that whitespace has already been quoted as required. Hence,
+  # do nothing other than immediately return $_[0] as is.
+  # We currently don't properly handle tabs either, so we'll
+  # do the same if $_[0] =~ /\t/.
+  return $_[0] if ($_[0] =~ /"/ || $_[0] =~ /\t/);
+
+  # We want to split on /\s\-I/ not /\-I/
+  my @in = split /\s\-I/, $_[0];
+  my $s = @in - 1;
+  my %s;
+  my %q;
+
+  # First up, let's reinstate the ' ' characters that split
+  # removed
+  for(my $i = 0; $i < $s; $i++) {
+    $in[$i] .= ' ';
+  }
+
+  # This for{} block dies if it finds that any of the ' -I'
+  # occurrences in $_[0] are part of a directory name.
+  for(my $i = 1; $i < $s; $i++) {
+    my $t = $in[$i + 1];
+    while($t =~ /\s$/) {chop $t}
+    die "Found a '", $in[$i], "-I", $t, "' directory.",
+        " INC Config argument is ambiguous.",
+        " Please use doublequotes to signify your intentions"
+      if -d ($in[$i] . "-I" . $t);
+  }
+
+  $s++; # Now the same as scalar(@in)
+
+  # Remove (but also Keep track of the amount of) whitespace
+  # at the end of each element of @in.
+  for(my $i = 0; $i < $s; $i++) {
+    my $count = 0;
+    while($in[$i] =~ /\s$/) {
+      chop $in[$i];
+      $count++;
+    }
+    $s{$i} = $count;
+  }
+
+  # Note which elements of @in still contain whitespace. These
+  # (and only these) elements will be quoted
+  for(my $i = 0; $i < $s; $i++) {
+    $q{$i} = 1 if $in[$i] =~ /\s/;
+  }
+
+  # Reinstate the occurrences of '-I' that were removed by split(),
+  # insert any quotes that are needed, reinstate the whitespace
+  # that was removed earlier, then join() the array back together
+  # again.
+  for(my $i = 0; $i < $s; $i++) {
+    $in[$i] = '-I' . $in[$i] if $i;
+    $in[$i] = '"' . $in[$i] . '"' if $q{$i};
+    $in[$i] .= ' ' x $s{$i};
+  }
+
+  # Note: If there was no whitespace that needed quoting, the
+  # original argument should not have changed in any way.
+
+  my $out = join '', @in;
+  $out =~ s/"\-I\s+\//"\-I\//g;
+  $_[0] = $out;
+}
+
+sub fix_space {
+    $_[0] =~ s/ /\\ /g if $_[0] =~ / /;
+    $_[0];
+}
+
+#==============================================================================
+# This routine used by C/t/09parser to test that the expected parser is in use
+#==============================================================================
+
+sub _parser_test {
+    my $dir = '_Inline_test';
+    if(! -d $dir) {
+      my $ok = mkdir $dir;
+      warn $! if !$ok;
+    }
+
+    warn $! if !open(TEST_FH, '>>', "$dir/parser_id");
+    print TEST_FH $_[0];
+    warn $! if !close(TEST_FH);
+}
+
+#=======================================================================
+# This routine used to cleanup files created by _TESTING (config option)
+#=======================================================================
+
+sub _testing_cleanup {
+    my $dir = '_Inline_test';
+
+    if(-f "$dir/parser_id") {
+      warn "Failed to unlink C/$dir/parser_id\n" if !unlink("$dir/parser_id");
+    }
+
+    if(-f "$dir/void_test") {
+      warn "Failed to unlink C/$dir/void_test\n" if !unlink("$dir/void_test");
+    }
 }
 
 1;

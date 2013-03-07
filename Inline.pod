@@ -5,16 +5,16 @@ Inline - Write Perl subroutines in other programming languages.
 =head1 SYNOPSIS
 
     use Inline C;
-    
+
     print "9 + 16 = ", add(9, 16), "\n";
     print "9 - 16 = ", subtract(9, 16), "\n";
- 
+
     __END__
     __C__
     int add(int x, int y) {
       return x + y;
     }
- 
+
     int subtract(int x, int y) {
       return x - y;
     }
@@ -145,9 +145,9 @@ following syntaxes:
 =item The DATA Keyword.
 
     use Inline Java => 'DATA';
-    
+
     # Perl code goes here ...
-    
+
     __DATA__
     __Java__
     /* Java code goes here ... */
@@ -179,9 +179,9 @@ idea they exist during compile time.
 
     use Inline::Files;
     use Inline Java => 'FILE';
-    
+
     # Perl code goes here ...
-    
+
     __JAVA__
     /* Java code goes here ... */
 
@@ -220,10 +220,10 @@ distributed/CPAN code.
 =item Strings
 
     use Inline Java => <<'END';
-    
+
     /* Java code goes here ... */
     END
-    
+
     # Perl code goes here ...
 
 You also just specify the source code as a single string. A handy way to
@@ -240,12 +240,12 @@ Inline' statement. Here is one way to do it:
     my $code;
     BEGIN {
         $code = <<END;
-    
+
     /* Java code goes here ... */
     END
     }
     use Inline Java => $code;
-    
+
     # Perl code goes here ...
 
 =item The bind() Function
@@ -256,10 +256,10 @@ interface exceptions mentioned above) The C<bind()> method takes the
 same arguments as C<'use Inline ...'>.
 
     my $code = <<END;
-    
+
     /* Java code goes here ... */
     END
-    
+
     Inline->bind(Java => $code);
 
 You can think of C<bind()> as a way to C<eval()> code in other
@@ -273,8 +273,11 @@ modules. See instructions below for creating modules with Inline.
 
 The source code for Inline can also be specified as an external
 filename, a reference to a subroutine that returns source code, or a
-reference to an array that contains lines of source code. These methods
-are less frequently used but may be useful in some situations.
+reference to an array that contains lines of source code. (Note that
+if the external source file is in the current directory it must be
+specified with a leading './' - ie './file.ext' instead of simply
+'file.ext'.) These methods are less frequently used but may be useful
+in some situations.
 
 =item Shorthand
 
@@ -283,9 +286,9 @@ there are no extra parameters, you can omit the keyword altogether.
 For example:
 
     use Inline 'Java';
-    
+
     # Perl code goes here ...
-    
+
     __DATA__
     __Java__
     /* Java code goes here ... */
@@ -294,9 +297,9 @@ or
 
     use Inline::Files;
     use Inline 'Java';
-    
+
     # Perl code goes here ...
-    
+
     __JAVA__
     /* Java code goes here ... */
 
@@ -316,34 +319,34 @@ programming languages. Here is another example:
     # The module Foo.pm
     package Foo;
     use AutoLoader;
-    
+
     use Inline C;
     use Inline C => DATA => FILTERS => 'Strip_POD';
     use Inline Python;
-    
+
     1;
-    
+
     __DATA__
-    
+
     sub marine {
         # This is an autoloaded subroutine
     }
-    
+
     =head1 External subroutines
-    
+
     =cut
-    
+
     __C__
     /* First C section */
-    
+
     __C__
     /* Second C section */
     =head1 My C Function
-    
+
     Some POD doc.
-    
+
     =cut
-    
+
     __Python__
     """A Python Section"""
 
@@ -396,7 +399,7 @@ different code sections. When a source code section is passed in,
 Inline will apply whichever options have been specified up to that
 point. Here is a complex configuration example:
 
-    use Inline (Config => 
+    use Inline (Config =>
                 DIRECTORY => './inline_dir',
                );
     use Inline (C => Config =>
@@ -405,7 +408,7 @@ point. Here is a complex configuration example:
     use Inline (C => 'DATA',         # First C Section
                 LIBS => ['-llocal1', '-llocal2'],
                );
-    use Inline (Config => 
+    use Inline (Config =>
                 WARNINGS => 0,
                );
     use Inline (Python => 'DATA',    # First Python Section
@@ -434,7 +437,7 @@ do, see C<Inline::C>.
 If a particular config option has value options of 1 and 0, you can use
 the ENABLE and DISABLE modifiers. In other words, this:
 
-    use Inline Config => 
+    use Inline Config =>
                FORCE_BUILD => 1,
                CLEAN_AFTER_BUILD => 0;
 
@@ -546,7 +549,8 @@ C<Inline::>. It will then call that module's C<register()> method to get
 useful information for future invocations.
 
 Whenever you add a new ILSM, you should delete this file so that Inline
-will auto-discover your newly installed language module.
+will auto-discover your newly installed language module. (This should
+no longer be necessary as of Inline-0.49.)
 
 =head1 Configuration Options
 
@@ -641,16 +645,29 @@ platforms. See the C<GLOBAL> shortcut below.
 
 =head2 UNTAINT
 
-You must use this option whenever you use Perl's C<-T> switch, for taint
+You can use this option whenever you use Perl's C<-T> switch, for taint
 checking. This option tells Inline to blindly untaint all tainted
-variables. It also turns on SAFEMODE by default. See the C<UNTAINT>
+variables. (This is generally considerd to be an appallingly insecure
+thing to do, and not to be recommended - but the option is there for
+you to use if you want. Please consider using something other than
+Inline for scripts that need taint checking.)
+It also turns on SAFEMODE by default. See the C<UNTAINT>
 shortcut below.
+You will see warnings about blindly untainting fields in both %ENV
+and Inline objects. If you want to silence these warnings, set the
+Config option NO_UNTAINT_WARN => 1.
+There can be some problems untainting Inline scripts where older
+versions of Cwd, such as those that shipped with early versions of
+perl-5.8 (and earlier), are installed. Updating Cwd will probably
+solve these problems.
 
 =head2 SAFEMODE
 
 Perform extra safety checking, in an attempt to thwart malicious code.
 This option cannot guarantee security, but it does turn on all the
-currently implemented checks.
+currently implemented checks. (Currently, the only "currently
+implemented check" is to ensure that the C<DIRECTORY> option has also
+been used.)
 
 There is a slight startup penalty by using SAFEMODE. Also, using UNTAINT
 automatically turns this option on. If you need your code to start
@@ -699,6 +716,13 @@ C<VERSION> shortcut below.
 Puts Inline into 'REPORTBUG' mode, which is what you want if you desire
 to report a bug.
 
+=head2 REWRITE_CONFIG_FILE
+
+Default is 0, but setting 'REWRITE_CONFIG_FILE => 1' will mean that the
+existing configuration file in the Inline DIRECTORY will be overwritten.
+(This is useful if the existing config file is not up to date as regards
+supported languages.)
+
 =head2 WARNINGS
 
 This option tells Inline whether to print certain warnings. Default is 1.
@@ -711,7 +735,7 @@ Inline scripts.
 
     perl -MInline=NOCLEAN inline_script.pl
 
-or 
+or
 
     perl -MInline=Info,force,NoClean inline_script.pl
 
@@ -721,7 +745,7 @@ like this:
 
     use Inline 'Info', 'Force', 'Noclean';
 
-NOTE: 
+NOTE:
 If a C<'use Inline'> statement is used to set shortcuts, it can not be
 used for additional purposes.
 
@@ -779,6 +803,15 @@ It has been removed from Inline altogether and replaced with a much
 simpler and more powerful mechanism, C<Inline::MakeMaker>. See the
 section below on how to create modules with Inline.
 
+=item _TESTING
+
+Used internally by C/t/09parser.t and C/t/10callback.t(in the Inline::C test
+suite). Setting this option with Inline::C will mean that files named 'parser_id'
+and 'void_test' are created in the ./Inline_test directory, creating that
+directory if it doesn't already exist. The files (but not the ./Inline_test
+directory) are cleaned up by calling Inline::C::_testing_cleanup().
+Also used by t/06rewrite_config.t to trigger a warning.
+
 =item TIMERS
 
 Turn on BUILD_TIMERS to get extra diagnostic info about builds.
@@ -792,6 +825,9 @@ environment is safe.
 =item UNTAINT
 
 Turn the UNTAINT option on. Used with C<-T> switch.
+In terms of secure practices, this is definitely *not* a recommended
+way of dealing with taint checking, but it's the *only* option
+currently available with Inline. Use it at your own risk.
 
 =item VERSION
 
@@ -817,24 +853,27 @@ the options do) Next, modify the C<Simple.pm> file to look like this:
     use base 'Exporter';
     @EXPORT_OK = qw(add subtract);
     use strict;
-    
+
     use Inline C => 'DATA',
                VERSION => '1.23',
                NAME => 'Math::Simple';
-    
+
+    # The following Inline->init() call is optional - see below for more info.
+    #Inline->init();
+
     1;
-    
+
     __DATA__
-    
+
     =pod
-    
+
     =cut
-    
+
     __C__
     int add(int x, int y) {
       return x + y;
     }
-    
+
     int subtract(int x, int y) {
       return x - y;
     }
@@ -844,7 +883,7 @@ and C<VERSION> parameter. The C<NAME> must match your module's package
 name. The C<VERSION> parameter must match your module's C<$VERSION>
 variable and they must be of the form C</^\d\.\d\d$/>.
 
-NOTE: 
+NOTE:
 These are Inline's sanity checks to make sure you know what you're doing
 before uploading your code to CPAN. They insure that once the module has
 been installed on someone's system, the module would not get
@@ -859,11 +898,35 @@ to
 
     use Inline::MakeMaker;
 
+And, in order that the module build work correctly in the cpan shell,
+add the following directive to the Makefile.PL's WriteMakefile():
+
+        CONFIGURE_REQUIRES  =>  {
+            'Inline::MakeMaker'     => 0.45,
+            'ExtUtils::MakeMaker'   => 6.52,
+        },
+
+This "CONFIGURE_REQUIRES" directive ensures that the cpan shell will
+install Inline on the user's machine (if it's not already present)
+before building your Inline-based module.
+Specifying of "ExtUtils::MakeMaker => 6.52," is optional, and can be
+omitted if you like. It ensures only that some harmless warnings relating
+to the "CONFIGURE_REQUIRES" directive won't be emitted during the
+building of the module. It also means, of course, that
+ExtUtils::Makemaker will first be updated on the user's machine unless
+the user already has version 6.52 or later.
+
+If the "Inline->init();" is not done then, having installed Math::Simple,
+a warning that "One or more DATA sections were not processed by Inline"
+will appear when (and only when) Math::Simple is loaded by a "require
+call. It's a harmless warning - and if you're prepared to live with it,
+then there's no need to make the "Inline->init();" call.
+
 When the person installing C<Math::Simple> does a "C<make>", the
 generated Makefile will invoke Inline in such a way that the C code will
 be compiled and the executable code will be placed into the C<./blib>
 directory. Then when a "C<make install>" is done, the module will be
-copied into the appropiate Perl sitelib directory (which is where an
+copied into the appropriate Perl sitelib directory (which is where an
 installed module should go).
 
 Now all you need to do is:
@@ -872,9 +935,11 @@ Now all you need to do is:
     make dist
 
 That will generate the file C<Math-Simple-0.20.tar.gz> which is a
-distributable package. That's all there is to it.
+distributable package. (It will also generate some harmless warnings in
+relation to "CONFIGURE_REQUIRES" unless the version of your
+ExtUtils::MakeMaker is 6.52 or later.) That's all there is to it.
 
-IMPORTANT NOTE: 
+IMPORTANT NOTE:
 Although the above steps will produce a workable module, you still have
 a few more responsibilities as a budding new CPAN author. You need to
 write lots of documentation and write lots of tests. Take a look at some
@@ -957,7 +1022,11 @@ that meets one of the following conditions:
     I) Create bin/_Inline/; if possible
 
 Failing that, Inline will croak. This is rare and easily remedied by
-just making a directory that Inline will use;
+just making a directory that Inline will use.
+
+If the PERL_INSTALL_ROOT Environment Variable has been set, you will need
+to make special provision for that if the 'make install' phase of your
+Inline scripts are to succeed.
 
 If the module option is being compiled for permanent installation, then
 Inline will only use C<./_Inline/> to build in, and the
@@ -1048,7 +1117,9 @@ Sisyphus <sisyphus@cpan.org> fixed some bugs and is current co-maintainer.
 
 =head1 COPYRIGHT
 
-Copyright (c) 2000, 2001, 2002. Brian Ingerson. All rights reserved.
+Copyright (c) 2000-2002. Brian Ingerson.
+
+Copyright (c) 2008, 2010-2012. Sisyphus.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

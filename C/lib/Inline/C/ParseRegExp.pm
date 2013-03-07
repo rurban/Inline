@@ -10,12 +10,13 @@ sub register {
 }
 
 sub get_parser {
+    Inline::C::_parser_test("Inline::C::ParseRegExp::get_parser called\n") if $_[0]->{CONFIG}{_TESTING};
     bless {}, 'Inline::C::ParseRegExp'
 }
 
 sub code {
     my($self,$code) = @_;
-    
+
     # These regular expressions were derived from Regexp::Common v0.01.
     my $RE_comment_C   = q{(?:(?:\/\*)(?:(?:(?!\*\/)[\s\S])*)(?:\*\/))};
     my $RE_comment_Cpp = q{(?:\/\*(?:(?!\*\/)[\s\S])*\*\/|\/\/[^\n]*\n)};
@@ -33,7 +34,7 @@ sub code {
     $code =~ s/^\#.*(\\\n.*)*//mgo;
     #$code =~ s/$RE_quoted/\"\"/go; # Buggy, if included.
     $code =~ s/$RE_balanced_brackets/{ }/go;
-    
+
     $self->{_the_code_most_recently_parsed} = $code; # Simplifies debugging.
 
     my $normalize_type = sub {
@@ -74,7 +75,7 @@ sub code {
     # vertical whitespace.
     my $sp = qr{[ \t]|\n(?![ \t]*\n)};
 
-    my $re_type = qr {( 
+    my $re_type = qr {(
 			(?: \w+ $sp* )+? # words
 			(?: \*  $sp* )*  # stars
 			)}xo;
@@ -98,27 +99,34 @@ sub code {
         goto RESYNC if $self->{data}{done}{$function};
         goto RESYNC if !defined
             $self->{data}{typeconv}{valid_rtypes}{$return_type};
-        
+
         my(@arg_names,@arg_types);
 	my $dummy_name = 'arg1';
 
 	foreach my $arg (@arguments) {
-
+          my $arg_no_space = $arg;
+          $arg_no_space =~ s/\s//g;
+          # If $arg_no_space is 'void', there will be no identifier.
 	    if(my($type, $identifier) =
 	       $arg =~ /^\s*$re_type(?:$re_identifier)?\s*$/o)
 	    {
 		my $arg_name = $identifier;
 		my $arg_type = &$normalize_type($type);
 
-		if(!defined $arg_name) {
+		if((!defined $arg_name) && ($arg_no_space ne 'void')) {
 		    goto RESYNC if !$is_decl;
 		    $arg_name = $dummy_name++;
 		}
-		goto RESYNC if !defined
-		    $self->{data}{typeconv}{valid_types}{$arg_type};
-		
-		push(@arg_names,$arg_name);
-		push(@arg_types,$arg_type);
+		goto RESYNC if ((!defined
+		    $self->{data}{typeconv}{valid_types}{$arg_type}) && ($arg_no_space ne 'void'));
+
+            # Push $arg_name onto @arg_names iff it's defined. Otherwise ($arg_no_space
+            # was 'void'), push the empty string onto @arg_names (to avoid uninitialized
+            # warnings emanating from C.pm).
+		defined($arg_name) ? push(@arg_names,$arg_name)
+                               : push(@arg_names, '');
+            if($arg_name) {push(@arg_types,$arg_type)}
+            else {push(@arg_types,'')} # $arg_no_space was 'void' - this push() avoids 'uninitialized' warnings from C.pm
 	    }
 	    elsif($arg =~ /^\s*\.\.\.\s*$/) {
 		push(@arg_names,'...');
@@ -131,7 +139,7 @@ sub code {
 
         # Commit.
         push @{$self->{data}{functions}}, $function;
-        $self->{data}{function}{$function}{return_type}= $return_type; 
+        $self->{data}{function}{$function}{return_type}= $return_type;
         $self->{data}{function}{$function}{arg_names} = [@arg_names];
         $self->{data}{function}{$function}{arg_types} = [@arg_types];
         $self->{data}{done}{$function} = 1;
@@ -141,7 +149,7 @@ sub code {
       RESYNC:  # Skip the rest of the current line, and continue.
         $code =~ /\G[^\n]*\n/gc;
     }
- 
+
    return 1;  # We never fail.
 }
 
@@ -169,7 +177,9 @@ Mitchell N Charity <mcharity@vendian.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002. Brian Ingerson. All rights reserved.
+Copyright (c) 2002. Brian Ingerson.
+
+Copyright (c) 2008, 2010-2012. Sisyphus.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

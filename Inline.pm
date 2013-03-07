@@ -1,8 +1,9 @@
 package Inline;
 
 use strict;
-require 5.005;
-$Inline::VERSION = '0.45';
+require 5.006;
+$Inline::VERSION = '0.52';
+$Inline::VERSION = eval $Inline::VERSION;
 
 use AutoLoader 'AUTOLOAD';
 use Inline::denter;
@@ -23,7 +24,10 @@ $Inline::languages = undef; #needs to be global for AutoLoaded error messages
 
 our $did = '_Inline'; # Default Inline Directory
 
-my %shortcuts = 
+# This is the config file written by create_config_file().
+our $configuration_file = 'config-' . $Config::Config{'archname'} . '-' . $];
+
+my %shortcuts =
   (
    NOCLEAN =>      [CLEAN_AFTER_BUILD => 0],
    CLEAN =>        [CLEAN_BUILD_AREA => 1],
@@ -42,7 +46,7 @@ my %shortcuts =
    SITE_INSTALL => undef,  # No longer supported.
   );
 
-my $default_config = 
+my $default_config =
   {
    NAME => '',
    AUTONAME => -1,
@@ -58,12 +62,15 @@ my $default_config =
    PRINT_VERSION => 0,
    REPORTBUG => 0,
    UNTAINT => 0,
+   NO_UNTAINT_WARN => 0,
+   REWRITE_CONFIG_FILE => 0,
    SAFEMODE => -1,
    GLOBAL_LOAD => 0,
    BUILD_NOISY => 0,
    BUILD_TIMERS => 0,
    WARNINGS => 1,
    _INSTALL_ => 0,
+   _TESTING => 0,
   };
 
 sub UNTAINT {$untaint}
@@ -78,7 +85,7 @@ sub import {
     my $o;
     my ($pkg, $script) = caller;
     # Not sure what this is for. Let's see what breaks.
-    # $pkg =~ s/^.*[\/\\]//; 
+    # $pkg =~ s/^.*[\/\\]//;
     my $class = shift;
     if ($class ne 'Inline') {
 	croak M01_usage_use($class) if $class =~ /^Inline::/;
@@ -165,7 +172,7 @@ sub bind {
       unless ($language_id =~ /^\S+$/ and $language_id !~ /\n/);
     $code = shift or croak M03_usage_bind();
     @config = @_;
-	
+
     my $next = 0;
     for (@config) {
 	next if $next++ % 2;
@@ -185,13 +192,12 @@ sub bind {
 #==============================================================================
 # Process delayed objects that don't have source code yet.
 #==============================================================================
-# This code is an ugly hack because of the fact that you can't use an 
-# INIT block at "run-time proper". So we kill the warning for 5.6+ users
-# and tell them to use a Inline->init() call if they run into problems. (rare)
-my $lexwarn = ($] >= 5.006) ? 'no warnings;' : '';
+# This code is an ugly hack because of the fact that you can't use an
+# INIT block at "run-time proper". So we kill the warning and tell users
+# to use an Inline->init() call if they run into problems. (rare)
 
 eval <<END;
-$lexwarn
+no warnings;
 \$INIT = \$INIT; # Needed by Sarathy's patch.
 sub INIT {
     \$INIT++;
@@ -257,7 +263,7 @@ sub glue {
 	eval "require $o->{INLINE}{ILSM_module}";
 	croak M05_error_eval('glue', $@) if $@;
         $o->push_overrides;
-	bless $o, $o->{INLINE}{ILSM_module};    
+	bless $o, $o->{INLINE}{ILSM_module};
 	$o->validate(@config);
     }
     else {
@@ -307,12 +313,15 @@ sub push_overrides {
             next if defined $o->{OVERRIDDEN}{$ilsm . "::$override"};
             $o->{OVERRIDDEN}{$ilsm . "::$override"} =
               \&{$ilsm . "::$override"};
+            {
+            no warnings 'redefine';
             *{$ilsm . "::$override"} =
-              *{$using_module . "::$override"};
+              \&{$using_module . "::$override"};
+            }
         }
     }
 }
-        
+
 #==============================================================================
 # Restore the modules original methods
 #==============================================================================
@@ -363,7 +372,7 @@ sub check_config {
 	my ($key, $value) = (shift, shift);
 	if (defined $default_config->{$key}) {
 	    if ($key =~ /^(WITH|USING)$/) {
-		croak M10_usage_WITH_USING() 
+		croak M10_usage_WITH_USING()
                   if (ref $value and ref $value ne 'ARRAY');
 		$value = [$value] unless ref $value;
 		$o->{CONFIG}{$key} = $value;
@@ -375,7 +384,7 @@ sub check_config {
 		$value = abs_path($value);
 	    }
 	    elsif ($key eq 'NAME') {
-		croak M12_usage_NAME($value) 
+		croak M12_usage_NAME($value)
 		  unless $value =~ /^[a-zA-Z_](\w|::)*$/;
 	    }
 	    elsif ($key eq 'VERSION') {
@@ -395,6 +404,28 @@ sub check_config {
 #==============================================================================
 sub fold_options {
     my $o = shift;
+
+# The following small section of code seems, to me, to be unnecessary - which is the
+# reason that I've commented it out. I've left it here (including its associated comments)
+# in case it later becomes evident that there *is* good reason to include it. --sisyphus
+#
+## This bit tries to enable UNTAINT automatically if required when running the test suite.
+#    my $env_ha = $ENV{HARNESS_ACTIVE} || 0 ;
+#    my ($harness_active) = $env_ha =~ /(.*)/ ;
+#    if (($harness_active)&&(! $o->{CONFIG}{UNTAINT})){
+#            eval {
+#                    require Scalar::Util;
+#                    $o->{CONFIG}{UNTAINT} =
+#                      (Scalar::Util::tainted(Cwd::cwd()) ? 1 : 0) ;
+## Disable SAFEMODE in the test suite, we know what we are doing...
+#                    $o->{CONFIG}{SAFEMODE} = 0 ;
+#                    warn "\n-[tT] enabled for test suite.
+#Automatically setting UNTAINT=1 and SAFEMODE=0.\n"
+#                     unless $Inline::_TAINT_WARNING_ ;
+#                    $Inline::_TAINT_WARNING_ = 1 ;
+#            } ;
+#   }
+##
     $untaint = $o->{CONFIG}{UNTAINT} || 0;
     $safemode = (($o->{CONFIG}{SAFEMODE} == -1) ?
 		 ($untaint ? 1 : 0) :
@@ -409,7 +440,7 @@ sub fold_options {
     if ($o->{CONFIG}{AUTONAME} == -1) {
 	$o->{CONFIG}{AUTONAME} = length($o->{CONFIG}{NAME}) ? 0 : 1;
     }
-    $o->{API}{cleanup} = 
+    $o->{API}{cleanup} =
       ($o->{CONFIG}{CLEAN_AFTER_BUILD} and not $o->{CONFIG}{REPORTBUG});
 }
 
@@ -442,12 +473,12 @@ sub check_installed {
     pop @dirparts unless $dirparts[-1];
     push @dirparts, $file;
     my @endparts = splice(@dirparts, 0 - @pkgparts);
-    
+
     $dirparts[-1] = 'arch'
       if $dirparts[-2] eq 'blib' && $dirparts[-1] eq 'lib';
-    File::Spec->catfile(@endparts) eq $realname 
+    File::Spec->catfile(@endparts) eq $realname
       or croak M28_error_grokking_path($realpath);
-    $realpath = 
+    $realpath =
       File::Spec->catpath($volume,File::Spec->catdir(@dirparts),"");
 
     $o->{API}{version} = $o->{CONFIG}{VERSION};
@@ -459,11 +490,11 @@ sub check_installed {
     my $suffix = $Config{dlext};
     my $obj = File::Spec->catfile($realpath,'auto',$o->{API}{modpname},
                                   "$o->{API}{modfname}.$suffix");
-    croak M30_error_no_obj($o->{CONFIG}{NAME}, $o->{API}{pkg}, 
+    croak M30_error_no_obj($o->{CONFIG}{NAME}, $o->{API}{pkg},
 			   $realpath) unless -f $obj;
 
-    @{$o->{CONFIG}}{qw( PRINT_INFO 
-			REPORTBUG 
+    @{$o->{CONFIG}}{qw( PRINT_INFO
+			REPORTBUG
 			FORCE_BUILD
 			_INSTALL_
 		      )} = (0, 0, 0, 0);
@@ -483,7 +514,7 @@ sub load {
 
     if ($o->{CONFIG}{_INSTALL_}) {
 	my $inline = "$o->{API}{modfname}.inl";
-	open INLINE, "> $inline" 
+	open INLINE, "> $inline"
 	  or croak M24_open_for_output_failed($inline);
 	print INLINE "*** AUTOGENERATED by Inline.pm ***\n\n";
 	print INLINE "This file satisfies the make dependency for ";
@@ -509,7 +540,7 @@ sub load {
 
 	package $module;
 	push \@$ {module}::ISA, qw(Exporter DynaLoader);
-        sub dl_load_flags { $global } 
+        sub dl_load_flags { $global }
 	${module}::->bootstrap;
 END
     croak M43_error_bootstrap($module, $@) if $@;
@@ -577,7 +608,7 @@ sub handle_shortcuts {
 	else {
 	    croak M48_usage_shortcuts($option);
 	}
-    }    
+    }
 }
 
 #==============================================================================
@@ -612,7 +643,7 @@ __END__
 sub receive_code {
     my $o = shift;
     my $code = shift;
-    
+
     croak M02_usage() unless (defined $code and $code);
 
     if (ref $code eq 'CODE') {
@@ -631,7 +662,7 @@ sub receive_code {
 	else {
 	    croak M07_code_file_does_not_exist($code);
 	}
-    } 
+    }
     else {
 	$o->{API}{code} = $code;
     }
@@ -645,7 +676,7 @@ sub read_inline_file {
     my ($lang, $pkg) = @{$o->{API}}{qw(language_id pkg)};
     my $langfile = uc($lang);
     croak M59_bad_inline_file($lang) unless $langfile =~ /^[A-Z]\w*$/;
-    croak M60_no_inline_files() 
+    croak M60_no_inline_files()
       unless (defined $INC{File::Spec::Unix->catfile("Inline","Files.pm")} and
 	      $Inline::Files::VERSION =~ /^\d\.\d\d$/ and
 	      $Inline::Files::VERSION ge '0.51');
@@ -668,8 +699,8 @@ sub check_config_file {
     my ($DIRECTORY, %config);
     my $o = shift;
 
-    croak M14_usage_Config() if defined %main::Inline::Config::;
-    croak M63_no_source($o->{API}{pkg}) 
+    croak M14_usage_Config() if %main::Inline::Config::;
+    croak M63_no_source($o->{API}{pkg})
       if $o->{INLINE}{md5} eq $o->{API}{code};
 
     # First make sure we have the DIRECTORY
@@ -677,7 +708,7 @@ sub check_config_file {
 	croak M15_usage_install_directory()
 	  if $o->{CONFIG}{DIRECTORY};
 	my $cwd = Cwd::cwd();
-        $DIRECTORY = 
+        $DIRECTORY =
           $o->{INLINE}{DIRECTORY} = File::Spec->catdir($cwd, $did);
 	if (not -d $DIRECTORY) {
 	    _mkdir($DIRECTORY, 0777)
@@ -689,25 +720,57 @@ sub check_config_file {
 	  $o->{CONFIG}{DIRECTORY} || $o->find_temp_dir;
     }
 
-    $o->create_config_file($DIRECTORY) 
-      if not -e File::Spec->catfile($DIRECTORY,"config");
+    if($o->{CONFIG}{REWRITE_CONFIG_FILE}) {
+      if(-e File::Spec->catfile($DIRECTORY, $configuration_file)) {
+        my $unlink = unlink(File::Spec->catfile($DIRECTORY, $configuration_file));
+        if(!$unlink) {warn "REWRITE_CONFIG_FILE is set, but removal of config file failed"}
+        else {warn "config file removal successful\n" if $o->{CONFIG}{_TESTING}}
+      }
+    }
 
-    open CONFIG, "< ".File::Spec->catfile($DIRECTORY,"config")
-      or croak M17_config_open_failed($DIRECTORY);
-    my $config = join '', <CONFIG>;
-    close CONFIG;
+       my $load_cfg = sub {
+           $o->create_config_file($DIRECTORY)
+             if not -e File::Spec->catfile($DIRECTORY, $configuration_file);
 
-    croak M62_invalid_config_file(File::Spec->catfile($DIRECTORY,"config"))
-      unless $config =~ /^version :/;
-    ($config) = $config =~ /(.*)/s if UNTAINT;
+           open CONFIG, "< ".File::Spec->catfile($DIRECTORY,$configuration_file)
+             or croak M17_config_open_failed($DIRECTORY);
+           my $config = join '', <CONFIG>;
+           close CONFIG;
 
-    %config = Inline::denter->new()->undent($config);
+           unless($config =~ /^version :/) {
+             warn "\$load_cfg sub: \$config: *${config}*\n";
+             croak M62_invalid_config_file(File::Spec->catfile($DIRECTORY,$configuration_file));
+           }
+
+           if(UNTAINT) {
+             warn "In Inline::check_config_file(): Blindly untainting Inline configuration file information.\n"
+               unless $o->{CONFIG}{NO_UNTAINT_WARN};
+             ($config) = $config =~ /(.*)/s;
+           }
+
+           %config = Inline::denter->new()->undent($config);
+       } ;
+
+       $load_cfg->() ;
+       if (! defined $config{languages}->{$o->{API}{language_id}}){
+        my $unlink = unlink(File::Spec->catfile($DIRECTORY, $configuration_file));
+        if(!$unlink) {warn "Failed to remove config file"}
+        else {warn "config file removed\n" if $o->{CONFIG}{_TESTING}}
+               $load_cfg->() ;
+       }
+
     $Inline::languages = $config{languages};
 
+    {
+    no warnings ('numeric'); # These warnings were a pain with devel releases.
+                             # If there's a problem with the version number, the
+                             # error message will output $config{version} anyway.
     croak M18_error_old_version($config{version}, $DIRECTORY)
 	unless (defined $config{version} and
                 $config{version} =~ /TRIAL/ or
 		$config{version} >= 0.40);
+    } # numeric warnings re-enabled.
+
     croak M19_usage_language($o->{API}{language_id}, $DIRECTORY)
       unless defined $config{languages}->{$o->{API}{language_id}};
     $o->{API}{language} = $config{languages}->{$o->{API}{language_id}};
@@ -744,15 +807,15 @@ sub create_config_file {
         my($v,$d,$f) = File::Spec->splitpath($inline);
         $f = "" if $f eq 'Inline.pm';
         $inline = File::Spec->catpath($v,$d,$f);
-        #my $INC = "-I$inline -I" . 
-        #          join(" -I", grep {(-d File::Spec->catdir($_,"Inline") or 
-        #                             -d File::Spec->catdir($_,"auto","Inline")
-	  #		            )} @INC);
-	#system "$perl $INC -MInline=_CONFIG_ -e1 $dir"
-        my @INC = map { "-I$_" }
+
+        # P::RD may be in a different PERL5LIB dir to Inline (as happens with cpan smokers).
+        # Therefore we need to grep for it - otherwise, if P::RD *is* in a different PERL5LIB
+        # directory the ensuing rebuilt @INC will not include that directory and attempts to use
+        # Inline::CPP (and perhaps other Inline modules) will fail because P::RD isn't found.
+        my @_inc = map { "-I$_" }
        ($inline,
-        grep {(-d File::Spec->catdir($_,"Inline") or -d File::Spec->catdir($_,"auto","Inline"))} @INC);
-       system $perl, @INC, "-MInline=_CONFIG_", "-e1", "$dir"
+        grep {(-d File::Spec->catdir($_,"Inline") or -d File::Spec->catdir($_,"auto","Inline") or -e File::Spec->catdir($_,"Parse/RecDescent.pm"))} @INC);
+       system $perl, @_inc, "-MInline=_CONFIG_", "-e1", "$dir"
 	  and croak M20_config_creation_failed($dir);
 	return;
     }
@@ -762,7 +825,7 @@ sub create_config_file {
   LIB:
     for my $lib (@INC) {
         next unless -d File::Spec->catdir($lib,"Inline");
-        opendir LIB, File::Spec->catdir($lib,"Inline") 
+        opendir LIB, File::Spec->catdir($lib,"Inline")
           or warn(M21_opendir_failed(File::Spec->catdir($lib,"Inline"))), next;
 	while ($mod = readdir(LIB)) {
 	    next unless $mod =~ /\.pm$/;
@@ -777,7 +840,7 @@ sub create_config_file {
             warn($@), next if $@;
 	    eval "\$register=&Inline::${mod}::register";
 	    next if $@;
-	    my $language = ($register->{language}) 
+	    my $language = ($register->{language})
 	      or warn(M22_usage_register($mod)), next;
 	    for (@{$register->{aliases}}) {
 		warn(M23_usage_alias_used($mod, $_, $languages{$_})), next
@@ -792,8 +855,9 @@ sub create_config_file {
 	closedir LIB;
     }
 
-    my $file = File::Spec->catfile($ARGV[0],"config");
+    my $file = File::Spec->catfile($ARGV[0], $configuration_file);
     open CONFIG, "> $file" or croak M24_open_for_output_failed($file);
+    flock(CONFIG, LOCK_EX);
     print CONFIG Inline::denter->new()
       ->indent(*version => $Inline::VERSION,
 	       *languages => \%languages,
@@ -801,6 +865,7 @@ sub create_config_file {
 	       *modules => \%modules,
 	       *suffixes => \%suffixes,
 	      );
+    flock(CONFIG, LOCK_UN);
     close CONFIG;
     exit 0;
 }
@@ -836,7 +901,7 @@ sub check_module {
     my $auto_level = 2;
     while ($auto_level <= 5) {
 	if ($o->{CONFIG}{AUTONAME}) {
-	    $module2 = 
+	    $module2 =
 	      $module . '_' . substr($o->{INLINE}{md5}, 0, 2 + $auto_level);
 	    $auto_level++;
 	} else {
@@ -847,10 +912,10 @@ sub check_module {
 	my @modparts = split /::/, $module2;
 	$o->{API}{modfname} = $modparts[-1];
         $o->{API}{modpname} = File::Spec->catdir(@modparts);
-	$o->{API}{build_dir} = 
+	$o->{API}{build_dir} =
           File::Spec->catdir($o->{INLINE}{DIRECTORY},
                              'build',$o->{API}{modpname});
-        $o->{API}{install_lib} = 
+        $o->{API}{install_lib} =
           File::Spec->catdir($o->{INLINE}{DIRECTORY}, 'lib');
 
         my $inl = File::Spec->catfile($o->{API}{install_lib},"auto",
@@ -904,9 +969,9 @@ sub install {
 #	      $o->{CONFIG}{NAME} =~ /^$o->{API}{pkg}::\w(\w|::)+$/
 #	     );
 
-    my ($mod_name, $mod_ver, $ext_name, $ext_ver) = 
+    my ($mod_name, $mod_ver, $ext_name, $ext_ver) =
       ($o->{API}{pkg}, $ARGV[0], @{$o->{CONFIG}}{qw(NAME VERSION)});
-    croak M41_usage_install_version_mismatch($mod_name, $mod_ver, 
+    croak M41_usage_install_version_mismatch($mod_name, $mod_ver,
 					     $ext_name, $ext_ver)
       unless ($mod_ver eq $ext_ver);
     $o->{INLINE}{INST_ARCHLIB} = $ARGV[1];
@@ -921,7 +986,7 @@ sub install {
                                               $o->{API}{modpname});
     $o->{API}{directory} = $o->{INLINE}{DIRECTORY};
     my $cwd = Cwd::cwd();
-    $o->{API}{install_lib} = 
+    $o->{API}{install_lib} =
       File::Spec->catdir($cwd,$o->{INLINE}{INST_ARCHLIB});
     $o->{API}{location} =
       File::Spec->catfile($o->{API}{install_lib},"auto",$o->{API}{modpname},
@@ -935,7 +1000,7 @@ sub install {
 #==============================================================================
 sub write_inl_file {
     my $o = shift;
-    my $inl = 
+    my $inl =
       File::Spec->catfile($o->{API}{install_lib},"auto",$o->{API}{modpname},
                           "$o->{API}{modfname}.inl");
     open INL, "> $inl"
@@ -956,7 +1021,7 @@ sub write_inl_file {
 	       *Config, { (map {($_,$Config{$_})}
 			   (qw( archname osname osvers
 				cc ccflags ld so version
-			      ))), 
+			      ))),
 			  (apiversion => $apiversion),
 			},
 	      );
@@ -981,18 +1046,26 @@ sub with_configs {
 }
 
 #==============================================================================
-# Blindly untaint tainted fields in Inline object.
+# Blindly untaint tainted fields in %ENV.
 #==============================================================================
 sub env_untaint {
     my $o = shift;
+        warn "In Inline::env_untaint() : Blindly untainting tainted fields in %ENV.\n" unless $o->{CONFIG}{NO_UNTAINT_WARN};
 
-    for (keys %ENV) {
-	($ENV{$_}) = $ENV{$_} =~ /(.*)/;
+    {
+    no warnings ('uninitialized'); # In case $ENV{$_} is set to undef.
+      for (keys %ENV) {
+	  ($ENV{$_}) = $ENV{$_} =~ /(.*)/;
+      }
     }
-    my $delim = $^O eq 'MSWin32' ? ';' : ':';
-    $ENV{PATH} = join $delim, grep {not /^\./ and -d $_ and
+
+    $ENV{PATH} = $^O eq 'MSWin32' ?
+                 join ';', grep {not /^\./ and -d $_
+				  } split /;/, $ENV{PATH}
+                 :
+                 join ':', grep {not /^\./ and -d $_ and
 				      not ((stat($_))[2] & 0022)
-				  } split $delim, $ENV{PATH};
+				  } split /:/, $ENV{PATH};
     map {($_) = /(.*)/} @INC;
 }
 #==============================================================================
@@ -1000,7 +1073,7 @@ sub env_untaint {
 #==============================================================================
 sub obj_untaint {
     my $o = shift;
-
+    warn "In Inline::obj_untaint() : Blindly untainting tainted fields in Inline object.\n" unless $o->{CONFIG}{NO_UNTAINT_WARN};
     ($o->{INLINE}{ILSM_module}) = $o->{INLINE}{ILSM_module} =~ /(.*)/;
     ($o->{API}{build_dir}) = $o->{API}{build_dir} =~ /(.*)/;
     ($o->{CONFIG}{DIRECTORY}) = $o->{CONFIG}{DIRECTORY} =~ /(.*)/;
@@ -1027,7 +1100,7 @@ sub clean_build {
     while ($dir = readdir(BUILD)) {
         my $maybedir = File::Spec->catdir($prefix,$dir);
         if (($maybedir and -d $maybedir) and ($dir =~ /\w{36,}/)) {
-            $o->rmpath($prefix,$dir); 
+            $o->rmpath($prefix,$dir);
 	}
     }
 
@@ -1089,8 +1162,8 @@ END
     {
 	no strict 'refs';
 	%versions = map {eval "use $_();"; ($_, $ {$_ . '::VERSION'})}
-	qw (Digest::MD5 Parse::RecDescent 
-	    ExtUtils::MakeMaker File::Path FindBin 
+	qw (Digest::MD5 Parse::RecDescent
+	    ExtUtils::MakeMaker File::Path FindBin
 	    Inline
 	   );
     }
@@ -1103,7 +1176,7 @@ END
     %Inline::REPORTBUG_Perl_Config = ();
     %Inline::REPORTBUG_Module_Versions = ();
     print REPORTBUG Inline::denter->new()
-      ->indent(*REPORTBUG_Inline_Object, $o, 
+      ->indent(*REPORTBUG_Inline_Object, $o,
 	       *REPORTBUG_Perl_Config, \%Config::Config,
 	       *REPORTBUG_Module_Versions, \%versions,
 	      );
@@ -1123,7 +1196,7 @@ sub print_info {
 Information about the processing of your Inline $o->{API}{language_id} code:
 
 END
-    
+
     print STDERR <<END if ($o->{INLINE}{object_ready});
 Your module is already compiled. It is located at:
 $o->{API}{location}
@@ -1147,7 +1220,7 @@ and I\'ll install the executable as:
 $o->{API}{location}
 
 END
-    
+
     eval {
 	print STDERR $o->info;
     };
@@ -1201,6 +1274,7 @@ sub rmpath {
     my @parts = File::Spec->splitdir($rmpath);
     while (@parts){
         $rmpath = File::Spec->catdir($prefix ? ($prefix,@parts) : @parts);
+        ($rmpath) = $rmpath =~ /(.*)/ if UNTAINT;
         rmdir $rmpath
 	  or last; # rmdir failed because dir was not empty
 	pop @parts;
@@ -1235,7 +1309,7 @@ sub _rmtree {
 	    ($root) = $root =~ /(.*)/ if UNTAINT;
             rmdir($root) or croak M54_rmdir_failed($root);
         }
-        else { 
+        else {
 	    ($root) = $root =~ /(.*)/ if UNTAINT;
 	    unlink($root) or croak M55_unlink_failed($root);
         }
@@ -1248,12 +1322,12 @@ sub _rmtree {
 my $TEMP_DIR;
 sub find_temp_dir {
     return $TEMP_DIR if $TEMP_DIR;
-    
+
     my ($temp_dir, $home, $bin, $cwd, $env);
     $temp_dir = '';
     $env = $ENV{PERL_INLINE_DIRECTORY} || '';
     $home = $ENV{HOME} ? abs_path($ENV{HOME}) : '';
-    
+
     if ($env and
 	-d $env and
 	-w $env) {
@@ -1265,39 +1339,41 @@ sub find_temp_dir {
            -w File::Spec->catdir($cwd,".Inline")) {
         $temp_dir = File::Spec->catdir($cwd,".Inline");
     }
-    elsif (require FindBin and
-           $bin = $FindBin::Bin and
-           -d File::Spec->catdir($bin,".Inline") and
-           -w File::Spec->catdir($bin,".Inline")) {
-        $temp_dir = File::Spec->catdir($bin,".Inline");
-    } 
-    elsif ($home and
-           -d File::Spec->catdir($home,".Inline") and
-           -w File::Spec->catdir($home,".Inline")) {
-        $temp_dir = File::Spec->catdir($home,".Inline");
-    } 
-    elsif (defined $cwd and $cwd and
-           -d File::Spec->catdir($cwd, $did) and
-           -w File::Spec->catdir($cwd, $did)) {
-        $temp_dir = File::Spec->catdir($cwd, $did);
-    }
-    elsif (defined $bin and $bin and
-           -d File::Spec->catdir($bin, $did) and
-           -w File::Spec->catdir($bin, $did)) {
-        $temp_dir = File::Spec->catdir($bin, $did);
-    } 
-    elsif (defined $cwd and $cwd and
-	   -d $cwd and
-	   -w $cwd and
-           _mkdir(File::Spec->catdir($cwd, $did), 0777)) {
-        $temp_dir = File::Spec->catdir($cwd, $did);
-    }
-    elsif (defined $bin and $bin and
-	   -d $bin and
-	   -w $bin and
-           _mkdir(File::Spec->catdir($bin, $did), 0777)) {
-        $temp_dir = File::Spec->catdir($bin, $did);
-    }
+       else {
+               require FindBin ;
+        if ($bin = $FindBin::Bin and
+               -d File::Spec->catdir($bin,".Inline") and
+               -w File::Spec->catdir($bin,".Inline")) {
+            $temp_dir = File::Spec->catdir($bin,".Inline");
+        }
+        elsif ($home and
+               -d File::Spec->catdir($home,".Inline") and
+               -w File::Spec->catdir($home,".Inline")) {
+            $temp_dir = File::Spec->catdir($home,".Inline");
+        }
+        elsif (defined $cwd and $cwd and
+               -d File::Spec->catdir($cwd, $did) and
+               -w File::Spec->catdir($cwd, $did)) {
+            $temp_dir = File::Spec->catdir($cwd, $did);
+        }
+        elsif (defined $bin and $bin and
+               -d File::Spec->catdir($bin, $did) and
+               -w File::Spec->catdir($bin, $did)) {
+            $temp_dir = File::Spec->catdir($bin, $did);
+        }
+        elsif (defined $cwd and $cwd and
+          -d $cwd and
+          -w $cwd and
+               _mkdir(File::Spec->catdir($cwd, $did), 0777)) {
+            $temp_dir = File::Spec->catdir($cwd, $did);
+        }
+        elsif (defined $bin and $bin and
+          -d $bin and
+          -w $bin and
+               _mkdir(File::Spec->catdir($bin, $did), 0777)) {
+            $temp_dir = File::Spec->catdir($bin, $did);
+        }
+       }
 
     croak M56_no_DIRECTORY_found()
       unless $temp_dir;
@@ -1323,7 +1399,7 @@ sub _mkdir {
 sub M01_usage_use {
     my ($module) = @_;
     return <<END;
-It is invalid to use '$module' directly. Please consult the Inline 
+It is invalid to use '$module' directly. Please consult the Inline
 documentation for more information.
 
 END
@@ -1399,7 +1475,7 @@ END
 sub M07_code_file_does_not_exist {
     my ($file) = @_;
     return <<END;
-Inline assumes '$file' is a filename, 
+Inline assumes '$file' is a filename,
 and that file does not exist.
 
 END
@@ -1423,7 +1499,7 @@ END
 
 sub M10_usage_WITH_USING {
     return <<END;
-Config option WITH or USING must be a module name or an array ref 
+Config option WITH or USING must be a module name or an array ref
 of module names.
 
 END
@@ -1449,7 +1525,7 @@ sub M13_usage_VERSION {
     my ($version) = @_;
     return <<END;
 Invalid value for VERSION config option: '$version'
-Must be of the form '#.##'. 
+Must be of the form '#.##'.
 (Should also be specified as a string rather than a floating point number)
 
 END
@@ -1484,7 +1560,7 @@ END
 
 sub M17_config_open_failed {
     my ($dir) = @_;
-    my $file = File::Spec->catfile(${dir},"config");
+    my $file = File::Spec->catfile(${dir}, $configuration_file);
     return <<END;
 Can't open ${file} for input.
 
@@ -1496,7 +1572,7 @@ sub M18_error_old_version {
     my ($old_version, $directory) = @_;
     $old_version ||= '???';
     return <<END;
-You are using Inline version $Inline::VERSION with a directory that was 
+You are using Inline version $Inline::VERSION with a directory that was
 configured by Inline version $old_version. This version is no longer supported.
 Please delete the following directory and try again:
 
@@ -1507,25 +1583,28 @@ END
 
 sub M19_usage_language {
     my ($language, $directory) = @_;
+    require Config;
     return <<END;
 Error. You have specified '$language' as an Inline programming language.
 
 I currently only know about the following languages:
-    ${ defined $Inline::languages ? 
+    ${ defined $Inline::languages ?
        \ join(', ', sort keys %$Inline::languages) : \ ''
      }
 
 If you have installed a support module for this language, try deleting the
-config file from the following Inline DIRECTORY, and run again:
+config-${Config::Config{'archname'}}-$] file from the following Inline DIRECTORY, and run again:
 
     $directory
+
+(And if that works, please file a bug report.)
 
 END
 }
 
 sub M20_config_creation_failed {
     my ($dir) = @_;
-    my $file = File::Spec->catfile(${dir},"config");
+    my $file = File::Spec->catfile(${dir}, $configuration_file);
     return <<END;
 Failed to autogenerate ${file}.
 
@@ -1639,7 +1718,7 @@ END
 sub M31_inline_open_failed {
     my ($file) = @_;
     return <<END;
-Can't open Inline validate file: 
+Can't open Inline validate file:
 
     $file
 
@@ -1804,7 +1883,7 @@ sub M48_usage_shortcuts {
 Invalid shortcut '$shortcut' specified.
 
 Valid shortcuts are:
-    VERSION, INFO, FORCE, NOCLEAN, CLEAN, UNTAINT, SAFE, UNSAFE, 
+    VERSION, INFO, FORCE, NOCLEAN, CLEAN, UNTAINT, SAFE, UNSAFE,
     GLOBAL, NOISY and REPORTBUG
 
 END
@@ -1851,7 +1930,7 @@ END
 sub M54_rmdir_failed {
     my ($dir) = @_;
     return <<END;
-Can't remove directory '$dir': 
+Can't remove directory '$dir':
 
 $!
 
@@ -1862,7 +1941,7 @@ END
 sub M55_unlink_failed {
     my ($file) = @_;
     return <<END;
-Can't unlink file '$file': 
+Can't unlink file '$file':
 
 $!
 
@@ -1890,7 +1969,7 @@ END
 
 sub M58_site_install {
     return <<END;
-You have specified the SITE_INSTALL command. Support for this option has 
+You have specified the SITE_INSTALL command. Support for this option has
 been removed from Inline since version 0.40. It has been replaced by the
 use of Inline::MakeMaker in your Makefile.PL. Please see the Inline
 documentation for more help on creating and installing Inline based modules.
@@ -1901,7 +1980,7 @@ END
 sub M59_bad_inline_file {
     my ($lang) = @_;
     return <<END;
-Could not find any Inline source code for the '$lang' language using 
+Could not find any Inline source code for the '$lang' language using
 the Inline::Files module.
 
 END
@@ -1930,8 +2009,8 @@ You are using a config file that was created by an older version of Inline:
     $config
 
 This file and all the other components in its directory are no longer valid
-for this version of Inline. The best thing to do is simply delete all the 
-contents of the directory and let Inline rebuild everything for you. Inline 
+for this version of Inline. The best thing to do is simply delete all the
+contents of the directory and let Inline rebuild everything for you. Inline
 will do this automatically when you run your programs.
 
 END

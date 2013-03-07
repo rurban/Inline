@@ -1,5 +1,161 @@
 Revision history for Perl extension Inline::C.
 
+0.52 Thurs 07 Mar 2013
+      Version 0.52 released to CPAN.
+      C-Cookbook.pod - Change the "Object Oriented Inline" example so that it doesn't
+                       emit a "print (...) interpreted as function" warning if it's
+                       run with warnings enabled.
+
+0.51_03 Wed 28 Nov 2012
+      Version-0.51_03 released to CPAN.
+      C-Cookbook.pod - Add additional example ("Providing a pure perl alternative").
+      C.pm - Change sub compile so that it chdirs back to the original cwd before
+             it dies (if the build fails). (Ticket #81375.)
+
+0.51_02 Tues 20 Nov 2012
+      Version-0.51_02 released to CPAN.
+      Makefile.PL - correct typo.
+
+0.51_01 20 Nov 2012
+      Version-0.51_01 released to CPAN.
+      C.pm - setting $ENV{NO_INSANE_DIRNAMES} turns quote_space() into a no-op.
+             (This is just an undocumented fallback option in case the quote_space()
+             handling  of spaces breaks something for someone who has no need
+             of "space handling" anyway.)
+           - additional tweaks to quote_space sub [Ticket #81172]
+      Makefile.PL - Set EU::MM PREREQ_PM to 6.62, but only if the current
+                    version of EU::MM is 6.57_x, and even then only if
+                    building with INSTALL_BASE. (Ticket #81094).
+
+0.51 Sat 13 Oct 2012
+      Version 0.51 released to CPAN.
+
+0.50_03 Mon 8 Oct 2012
+      Fix Reini's patch (#67053). The original version of quote_space()
+      caused a breakage whenever the INC Config argument contained more
+      than one -I switch. (See #80026.)
+      Also, provide tests for this in the test suite.
+
+0.50_02 Thur 24 May 2012
+      Version 0.50_02 released to CPAN.
+
+0.50_02 Tues 20 Mar 2012
+      C.pm - Add CCFLAGSEX and PRE_HEAD config options.
+      C.pod - Document CCGLAGSEX and PRE_HEAD.
+      Add new test files t/15ccflags.t, t/16ccflagsex.t, t/17prehead.t
+       and t/prehead.in.
+      ../MANIFEST - Add new files.
+
+0.50_02 Sun 18 Mar 2012
+      C.pod - Rewrite CCFLAGS documentation to make it clear that setting
+              it clobbers the existing CCFLAGS (which is $Config{ccflags}).
+              Thanks, BrowserUk.
+      ../Inline-FAQ.pod - Document the C/t/09parser.t test failure that
+                          can occur when Cygwin is in need of 'rebaseall'
+                          - and what to do about it. Thanks, davido.
+
+0.50_02 Tues 14 Feb 2012
+      C.pm - Bump version number to 0.50_02
+
+0.50_01 Sun 12 Feb 2012
+      0.50_01 released to CPAN
+      lib/Inline/C/ParseRegExp.pm - Accommodate 'void' argument.
+      t/14void_arg.t - Test that 'void' arg gets processed as desired.
+      C.pod - Document new standing of 'void' argument.
+
+0.50_01 Wed 8 Feb 2012
+      C.pm - Bump version number to 0.50_01
+
+0.50 Tues 7 Feb 2012
+      Version 0.50 released to CPAN
+      C.pm - Bump version number to 0.50
+
+0.49_02 Fri 3 Feb 2012
+      Version 0.49_02 released to CPAN
+      C.pm - Bring version numbering into line with recommendations made in
+             http://perldoc.perl.org/perlmodstyle.html#Version-numbering
+
+0.49_01 Thurs 02 Feb 2012
+     Version 0.49_01 released to CPAN.
+
+0.49_01 Sun 25 Dec 2011
+     C.pm - Bump version to 0.49_01
+     C.pod - Fix typo. (Ticket 73108)
+
+0.49 Thurs 8 Dec 2011
+     Version 0.49 released to CPAN. (No changes from 0.48_02).
+
+0.48_02 Mon 5 Dec 2011
+     Version 0.48_02 released to CPAN.
+
+0.48_02 Fri 9 Sep 2011
+     - Bump Inline::C version to 0.48_02
+     - Make a correction and provide some elaboration in the 'Discussion'
+       relating to 'Object Oriented Inline' in C-Cookbook.pod.
+
+0.48_02 Thurs 25 Aug 2011
+     Add example for accessing fortran code to C-Cookbook.
+
+0.48_01 Mon 11 Apr 2011
+      Version 0.48_01 released to CPAN.
+      - C/C.pm: [cpan #67053] Space in pwd. Patch from Reini Urban to work with
+        spaces in the current dir.
+
+0.48 Mon 21 Feb 2011
+     Version 0.48 released to CPAN. (No changes from 0.47_02.)
+
+0.47_02 Tues 1 Feb 2011
+     Version 0.47_02 released to CPAN.
+      - Change the Test::Warn dependency from 0.22 to 0.21 and
+        specify it in top-level Makefile.PL instead of in C/Makefile.PL.
+
+0.47_01 Sun 30 January 2011
+     Version 0.47_01 released to CPAN.
+      - Use Test::Warn (on perl-5.8 and later) to check and suppress the
+        warnings produced by C/t/08taint.t during 'make test'. (Ticket #54825.)
+
+0.47 Fri 21 January 2011
+     Version 0.47 released to CPAN. No changes from 0.46_02
+
+0.46_02 Sat 18 Dec 2010
+      - Makefile.PL: insert 'return 1 if -e $_[0];' at beginning of
+        find_executable() subroutine. (RT ticket 61218)
+
+0.46_02 Sat 17 Apr 2010
+      - C-Cookbook.pod: Fix callback example. (RT ticket 56652)
+
+0.46_01 Wed 31 Mar 2010 (and released to CPAN as 0.46_01)
+      - C.pm: local()ise $_ in get_types(). (RT ticket 55607)
+      - C.pm: introduce capability to check that xs_bindings() is
+         working as expected. (Prompted by RT ticket 55543)
+      - C.pm: add _testing_cleanup() to facilitate cleaning up of
+         files created by setting the _TESTING config option
+      - t/08taint.t: Warn the user to expect "Blindly untainting ..."
+         warnings
+      - t/09parser.t: Make use of Inline::C::_testing_cleanup()
+      - add t/10callback.t (mainly in response to RT ticket 55543) and
+         t/11default_readonly.t (in response to RT ticket 55607).
+
+0.46_01 Mon 8 Mar 2010
+      - Add sub _parser_test() to C.pm (enables us to check which parser is in
+        use).
+      - Add tests (C/t/09parser.t) to check that the expected parser is being
+        used - makes use of '_TESTING' config option. (Involves minor changes
+        to lib/Inline/C/ParseRecDescent.pm and lib/Inline/C/ParseRegExp.pm).
+
+0.46_01 Sun 14 Feb 2010
+      - Second attempt at accommodating 'ccache cc' compiler (RT ticket 40140)
+
+0.46 Fri 12 Feb 2010
+      - Same as 0.45_02.
+
+0.45_02 Fri 5 Feb 2010
+      - Add C/t/08taint.t as part of RT ticket 13084 fix. See top level
+        "Changes" file.
+
+0.45_01 Thurs 28 Jan 2010
+      - Fix Rt tickets 40140, 45417 and 49419. See top level "Changes" file.
+
 0.45  Sat Nov 22 2008
       - No changes from 0.44_01
 
@@ -25,7 +181,7 @@ Revision history for Perl extension Inline::C.
 	  allows Inline::CPP to override only get_parser(). (NEILW)
 
 0.43  Sat Jul  7 12:53:33 PDT 2001
-	- Break up the generation of XS code into smaller stages which can 
+	- Break up the generation of XS code into smaller stages which can
 	  be overridden in Inline::CPP. Makes the code somewhat longer, but
 	  more clear. (NEILW)
 
@@ -49,9 +205,9 @@ Revision history for Perl extension Inline::C.
 	  Account for no trailing '/' in paths
 
 0.34  Sun May  6 16:56:53 PDT 2001
-	- Changed the generated Makefile.PL to not create any dependencies 
+	- Changed the generated Makefile.PL to not create any dependencies
 	  between Makefile and Makefile.PL. This was creating a problem on
-	  an HP-UX system using AFS. Inline users should never need this 
+	  an HP-UX system using AFS. Inline users should never need this
 	  dependency anyways.
 
 0.34  Tue May  1 00:05:58 PDT 2001
@@ -64,7 +220,7 @@ Revision history for Perl extension Inline::C.
 	- Added support for Inline::Filters. FILTERS config option.
 
 0.33  Sat Apr 28 20:20:29 PDT 2001
-	- Made installation of Inline::C optional. For those people without 
+	- Made installation of Inline::C optional. For those people without
 	  a C compiler who may wish to use Java.
 
 0.33  Sat Apr 28 20:20:29 PDT 2001

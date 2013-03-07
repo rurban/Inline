@@ -1,23 +1,39 @@
+#!perl -T
+
+BEGIN {
+  if($] >= 5.007) {
+    print "1..1\n";
+    warn "Skipped - applies only to perl 5.6.x\n";
+    print "ok 1\n";
+    exit(0);
+  }
+};
+
 BEGIN {
   if (exists $ENV{PERL_INSTALL_ROOT}) {
     warn "\nIgnoring \$ENV{PERL_INSTALL_ROOT} in $0\n";
     delete $ENV{PERL_INSTALL_ROOT};
   }
 };
+
 use File::Spec;
 use lib (File::Spec->catdir(File::Spec->updir(),'blib','lib'), File::Spec->catdir(File::Spec->curdir(),'blib','lib'));
 use strict;
 use Test;
 use diagnostics;
-use Inline Config => DIRECTORY => '_Inline_test';
+use Inline Config =>
+    UNTAINT => 1,
+    DIRECTORY => '_Inline_test';
 
 BEGIN {
     plan(tests => 5,
 	 todo => [],
 	 onfail => sub {},
 	);
+    warn "Expect a number of \"Blindly untainting ...\" warnings - these are intended.\n";
 }
 use Inline Config =>
+           UNTAINT => 1,
            DIRECTORY => '_Inline_test';
 
 # test 1 - Check string syntax
