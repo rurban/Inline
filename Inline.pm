@@ -2,7 +2,7 @@ package Inline;
 
 use strict;
 require 5.006;
-$Inline::VERSION = '0.53';
+$Inline::VERSION = '0.54';
 $Inline::VERSION = eval $Inline::VERSION;
 
 use AutoLoader 'AUTOLOAD';
@@ -278,6 +278,7 @@ sub glue {
     if ($o->{INLINE}{ILSM_suffix} ne 'so' and
 	$o->{INLINE}{ILSM_suffix} ne 'dll' and
 	$o->{INLINE}{ILSM_suffix} ne 'bundle' and
+	$o->{INLINE}{ILSM_suffix} ne 'sl' and
 	ref($o) eq 'Inline'
        ) {
 	eval "require $o->{INLINE}{ILSM_module}";
@@ -1063,10 +1064,15 @@ sub env_untaint {
                  join ';', grep {not /^\./ and -d $_
 				  } split /;/, $ENV{PATH}
                  :
-                 join ':', grep {not /^\./ and -d $_ and
-				      not ((stat($_))[2] & 0022)
-				  } split /:/, $ENV{PATH};
+                 join ':', grep {not /^\./ and -d $_ and not -w $_ || -W $_
+                                  } split /:/, $ENV{PATH};
+# Was:
+#                join ':', grep {not /^\./ and -d $_ and
+#		                 not ((stat($_))[2] & 0022)
+#				  } split /:/, $ENV{PATH};
+
     map {($_) = /(.*)/} @INC;
+
 }
 #==============================================================================
 # Blindly untaint tainted fields in Inline object.

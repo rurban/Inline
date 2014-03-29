@@ -1,5 +1,43 @@
 # Revision history for Perl extension Inline.
 
+--- version 0.54
+date Sat 29 Mar 2014
+     Update version number to 0.54
+     Release version 0.54 to CPAN
+
+--- version 0.53_02
+date Sun 16 Mar 2014
+     Version 0.53_02 released to CPAN
+
+--- version 0.53_02
+date Fri 7 Mar 2014
+     Update version to 0.53_02
+
+--- version 0.53_01
+date Thurs 6 Mar 2014
+     Version 0.53_01 released to CPAN
+     Update copyright notices (where approporiate) to include 2014
+     Modify env_untaint as per Alexander Haeckel's suggestion (Ticket #65703)
+
+--- version 0.53_01
+date Thurs 6 Feb 2014
+     Inline.pm - in sub glue() cater for the possibility that ILSM_suffix might be
+                 'sl' (in addition to the 'so', 'dll', and 'bundle' possibilities).
+
+--- version 0.53_01
+date Wed 13 Nov 2013
+     modules/Math/Simple/Simple.pm - spread the declaration of the package name over
+     two lines to prevent the module being picked up by the PAUSE indexer.
+     (Thanks Linda Walsh.)
+
+--- version 0.53_01
+date Sat 28 Sep 2013
+      t/01usages.t - Fix typo.
+
+--- version 0.53_01
+date Thurs 12 Sep 2013
+      Inline.pm - Update version number to 0.53_01
+
 --- version 0.53
 date Wed 1 May 2013
       Version 0.53 released to CPAN
