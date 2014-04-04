@@ -859,7 +859,7 @@ sub create_config_file {
 
     my $file = File::Spec->catfile($ARGV[0], $configuration_file);
     open CONFIG, "> $file" or croak M24_open_for_output_failed($file);
-    flock(CONFIG, LOCK_EX);
+    flock(CONFIG, LOCK_EX) if $^O !~ /^VMS|riscos|VOS$/;
     print CONFIG Inline::denter->new()
       ->indent(*version => $Inline::VERSION,
 	       *languages => \%languages,
@@ -867,7 +867,7 @@ sub create_config_file {
 	       *modules => \%modules,
 	       *suffixes => \%suffixes,
 	      );
-    flock(CONFIG, LOCK_UN);
+    flock(CONFIG, LOCK_UN) if $^O !~ /^VMS|riscos|VOS$/;
     close CONFIG;
     exit 0;
 }
