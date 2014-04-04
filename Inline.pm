@@ -2,7 +2,7 @@ package Inline;
 
 use strict;
 require 5.006;
-$Inline::VERSION = '0.54';
+$Inline::VERSION = '0.54_01';
 $Inline::VERSION = eval $Inline::VERSION;
 
 use AutoLoader 'AUTOLOAD';
@@ -12,6 +12,7 @@ use Carp;
 use Cwd qw(abs_path cwd);
 use File::Spec;
 use File::Spec::Unix;
+use Fcntl qw(LOCK_EX LOCK_UN);
 
 my %CONFIG = ();
 my @DATA_OBJS = ();
