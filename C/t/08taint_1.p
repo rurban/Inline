@@ -1,4 +1,4 @@
-BEGIN {is(${^TAINT}, 1, '1: taint_is_on');};
+BEGIN {is(${^TAINT}, 1, '1: taint_is_on');}
 
 use Inline Config =>
     UNTAINT => 1,

@@ -4,7 +4,6 @@
 date 2014-04-04
      import Fcntl constants for flock (rurban)
      flock only on supported platforms, would die on VMS,riscos,VOS (rurban)
-     print exitcode with failed commands
 
 --- version 0.54
 date Sat 29 Mar 2014
