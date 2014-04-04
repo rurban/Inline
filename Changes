@@ -1,11 +1,10 @@
 # Revision history for Perl extension Inline.
 
 --- version 0.54_01
-date 2014-04-04 12:22:37
+date 2014-04-04
      import Fcntl constants for flock (rurban)
      flock only on supported platforms, would die on VMS,riscos,VOS (rurban)
      print exitcode with failed commands
-     disable BUILD_NOISY redirects on MSWin32 with cmd.exe
 
 --- version 0.54
 date Sat 29 Mar 2014

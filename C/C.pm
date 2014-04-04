@@ -812,12 +812,14 @@ sub make {
     my ($o) = @_;
     my $make = $o->{ILSM}{MAKE} || $Config::Config{make}
       or croak "Can't locate your make binary";
+    local $ENV{MAKEFLAGS} = $ENV{MAKEFLAGS} =~ s/(--jobserver-fds=[\d,]+)//;
     $o->system_call("$make", 'out.make');
 }
 sub make_install {
     my ($o) = @_;
     my $make = $o->{ILSM}{MAKE} || $Config::Config{make}
       or croak "Can't locate your make binary";
+    local $ENV{MAKEFLAGS} = $ENV{MAKEFLAGS} =~ s/(--jobserver-fds=[\d,]+)//;
     $o->system_call("$make pure_install", 'out.make_install');
 }
 sub cleanup {
@@ -864,7 +866,7 @@ sub build_error_message {
     }
 
     my $errcode = $? >> 8;
-    return $output . <<END;
+    $output .= <<END;
 
 A problem was encountered while attempting to compile and install your Inline
 $o->{API}{language} code. The command that failed was:
@@ -876,6 +878,12 @@ $build_dir
 To debug the problem, cd to the build directory, and inspect the output files.
 
 END
+    if ($cmd =~ /^make >/) {
+      for (sort keys %ENV) {
+        $output .= "$_ = $ENV{$_}\n" if /^MAKE/;
+      }
+    }
+    return $output;
 }
 
 #==============================================================================
