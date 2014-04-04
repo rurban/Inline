@@ -1,7 +1,9 @@
 Revision history for Perl extension Inline::C.
 
---- version 0.54_01
-date 2014-04-04
+0.54_02 2014-04-04
+     cygwin gcc-4 isssue (Ticket #92144) (rurban)
+
+0.54_01 2014-04-04
      fix make -jn test, parallel tests (Ticket #85336) (rurban)
      disable BUILD_NOISY redirects on MSWin32 with cmd.exe (rurban)
      print exitcode with failed commands and MAKE* ENV values (rurban)

@@ -5,6 +5,7 @@ use File::Spec;
 
 my ($cc, $exe) = @Config{'cc', '_exe'};
 $cc =~ s/\s+-.+$//; #remove possible trailing options
+$exe = '' if $^O eq 'cygwin';
 
 my $found = 0;
 my $delim = $Config::Config{path_sep};
